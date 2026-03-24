@@ -4592,19 +4592,20 @@ function M._setup_keymaps(bufnr)
           break
         end
       end
+      if not win_id then goto continue end  -- bufhidden=wipe: no window means already wiped
       local name = vim.api.nvim_buf_get_name(bnum)
       local short = name:match("^grip://(.+)$") or name
       local rows = s.state and s.state.total_rows
       local row_label = rows and (" [" .. rows .. " rows]") or ""
       local pin_label = s.pinned and " [pinned]" or ""
       local elapsed = s.elapsed_ms and (" " .. s.elapsed_ms .. "ms") or ""
-      local visible = win_id and "" or " (hidden)"
       table.insert(items, {
         bufnr   = bnum,
         win_id  = win_id,
-        label   = short:gsub("%s*%[pinned%]", "") .. row_label .. elapsed .. pin_label .. visible,
+        label   = short:gsub("%s*%[pinned%]", "") .. row_label .. elapsed .. pin_label,
         pinned  = s.pinned,
       })
+      ::continue::
     end
     if #items == 0 then
       vim.notify("No open results", vim.log.levels.INFO)
@@ -4620,12 +4621,7 @@ function M._setup_keymaps(bufnr)
       items = items,
       display = function(item) return (item.pinned and "" or " ") .. " " .. item.label end,
       on_select = function(item)
-        if item.win_id then
-          vim.api.nvim_set_current_win(item.win_id)
-        else
-          -- Buffer exists but not visible: open in current window
-          vim.api.nvim_set_current_buf(item.bufnr)
-        end
+        vim.api.nvim_set_current_win(item.win_id)
       end,
     })
   end, "Result switcher (all open results)")
