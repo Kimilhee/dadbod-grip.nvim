@@ -369,6 +369,8 @@ Note: explain query plan is at `gQ` (Query Doctor).
 | `gC` / `<C-g>` | Switch database connection |
 | `gO` | Open read-only query result as editable table |
 | `gW` | Toggle watch mode (auto-refresh on timer, default 5s) |
+| `gL` | Pin / unpin result. Pinned results survive subsequent query executions. |
+| `gJ` | Result switcher: pick from all open grip result buffers (pinned listed first). |
 | `g!` | Toggle write mode (apply edits overwrites local file) |
 | `gN` | Rename column under cursor |
 | `q` | Focus query pad (pre-fills if empty; appends if pad has content) |
@@ -391,6 +393,7 @@ Note: explain query plan is at `gQ` (Query Doctor).
 | Key | Action |
 |-----|--------|
 | `<C-CR>` | Execute buffer (or SQL fence under cursor in notebooks) or selection (visual) into grip grid |
+| `<S-CR>` | Execute and always open result in a new split (never reuses an existing grid) |
 | `<C-s>` | Save query with `:GripSave` |
 | `gn` | Notebook picker (load .md or .sql file from project) |
 | `gq` | Load saved query (picker with SQL preview) |

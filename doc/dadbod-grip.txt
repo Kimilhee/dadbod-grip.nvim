@@ -98,12 +98,13 @@ packer.nvim: >lua
 setup() is called automatically by the plugin loader with sensible defaults.
 Override if needed: >lua
   require("dadbod-grip").setup({
-    limit            = 100,      -- default row limit for SELECT queries
-    max_col_width    = 40,       -- max display width per column
-    timeout          = 10000,    -- query timeout in milliseconds
-    completion       = true,     -- set false to use blink.cmp/nvim-cmp instead
-    connections_path = nil,      -- absolute path to shared connections.json
-    picker           = "builtin", -- "builtin", "telescope", or "snacks"
+    limit            = 100,
+    max_col_width    = 40,
+    timeout          = 10000,
+    completion       = true,
+    connections_path = nil,
+    picker           = "builtin",
+    pinned_max       = nil,
   })
 <
 When `completion` is false, grip's built-in TextChangedI popup is disabled.
@@ -119,6 +120,16 @@ When `picker` is set to "telescope" or "snacks", simple pickers (table picker,
 command palette, history) delegate to that backend. Complex pickers
 (connections, saved queries) always use the built-in picker. Falls back to
 built-in gracefully when the configured backend is not installed.
+
+                                                          *grip-pinned-max*
+`pinned_max` caps how many results can be pinned at once. Add it to your
+existing `setup()` call: >lua
+  require("dadbod-grip").setup({
+    pinned_max = 2,
+  })
+<
+When the cap is reached, `gL` refuses to pin and notifies you to unpin
+something first. Unset (nil, the default) means no cap.
 
 AI SQL generation (optional): >lua
   require("dadbod-grip").setup({
@@ -235,11 +246,12 @@ Action names (stable API) with their defaults:
   Grid: workflow ~
   grid_watch       = "gW"      grid_write_mode  = "g!"
   grid_open_edit   = "gO"      grid_fill        = "gA"  (AI row fill; :GripFill N)
+  grid_pin         = "gL"      grid_results     = "gJ"
 
   Query pad ~
-  qpad_execute     = "<C-CR>"  qpad_save        = "<C-s>"
-  qpad_ai          = "gA"      qpad_format      = "gF"
-  qpad_close       = "q"
+  qpad_execute     = "<C-CR>"  qpad_execute_new = "<S-CR>"
+  qpad_save        = "<C-s>"   qpad_ai          = "gA"
+  qpad_format      = "gF"      qpad_close       = "q"
 
   Schema sidebar ~
   sidebar_open     = "<CR>"    sidebar_open_spl = "<S-CR>"
@@ -569,6 +581,11 @@ SCHEMA AND WORKFLOW ~
   gC / <C-g>      Switch database connection
   gO              Open read-only query result as editable table
   gW              Toggle watch mode (auto-refresh every 5s; skips when staged)
+  gL              Pin / unpin result. Pinned results are never replaced by the
+                  next query execution. Use when comparing multiple queries.
+  gJ              Result switcher. Opens a picker over all live grip result
+                  buffers (pinned listed first). Selecting one focuses its
+                  window, or opens it in the current window if not visible.
   g!              Toggle write mode (apply overwrites local file; remote = off)
   gN              Rename column under cursor
   gw              Jump to grid window
@@ -731,6 +748,8 @@ Works with nvim-cmp, blink.cmp, or standalone via `<C-Space>`.
 Query pad keymaps:
   <C-CR>          Execute buffer contents into a grip grid (normal/insert)
   <C-CR>          Execute visual selection into a grip grid (visual mode)
+  <S-CR>      Execute and always open result in a new split (never reuses
+                  an existing grid, even an unpinned one)
   <C-Space>       Trigger SQL completion manually
   <C-s>           Save query with :GripSave
   gq              Load saved query (picker with SQL preview)

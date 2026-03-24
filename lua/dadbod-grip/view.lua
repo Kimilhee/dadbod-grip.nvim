@@ -12,18 +12,23 @@ local ui      = require("dadbod-grip.ui")
 local M = {}
 M._sessions = {}  -- [bufnr] = { state, url, query_sql }
 
---- Canonical content window finder: grid > welcome screen > nil.
+--- Canonical content window finder: unpinned grid > welcome screen > nil.
+--- Pinned sessions are excluded: callers must not auto-replace them.
 --- All window-placement callers use this. Never returns sidebar or query pad.
 function M.find_content_win()
   local wins = vim.api.nvim_tabpage_list_wins(0)
+  -- Pass 1: prefer an unpinned grip grid.
   for _, wid in ipairs(wins) do
-    if M._sessions[vim.api.nvim_win_get_buf(wid)] then return wid end
+    local s = M._sessions[vim.api.nvim_win_get_buf(wid)]
+    if s and not s.pinned then return wid end
   end
+  -- Pass 2: fall back to the welcome screen.
   for _, wid in ipairs(wins) do
     if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(wid)) == "grip://welcome" then
       return wid
     end
   end
+  -- All grids are pinned (or none exist): caller will create a new split.
   return nil
 end
 
@@ -678,9 +683,9 @@ local function build_render(session, opts)
     local mt = session.pending_mutation.type or "SQL"
     hints = " a:execute " .. mt .. "  U:cancel  gs:preview SQL  q:query"
   elseif st.readonly and not is_editable(session) then
-    hints = " r:refresh  Tab/w:col  gy:markdown  gq:saved  q:query  A:ai  4-9:views  ?:help"
+    hints = " r:refresh  Tab/w:col  gy:markdown  gq:saved  q:query  A:ai  gL:pin  gJ:switch  4-9:views  ?:help"
   else
-    hints = " i:edit  c:clone  d:delete  a:apply  r:refresh  gq:saved  q:query  A:ai  4-9:views  ?:help"
+    hints = " i:edit  c:clone  d:delete  a:apply  r:refresh  gq:saved  q:query  A:ai  gL:pin  gJ:switch  4-9:views  ?:help"
   end
   table.insert(lines, hints)
 
@@ -1049,6 +1054,11 @@ function M.open(state, url, query_sql, opts)
 
   local tbl = state.table_name or "result"
   local buf_name = "grip://" .. tbl
+  -- For raw query results, embed a SQL preview so multiple results are distinguishable.
+  if tbl == "result" and query_sql and query_sql ~= "" then
+    local preview = query_sql:gsub("\n", " "):gsub("%s+", " "):gsub("|", "!"):sub(1, 20)
+    buf_name = "grip://result [" .. preview .. "...]"
+  end
   -- Ensure unique name (avoid collision with grip://query pad or duplicate table opens)
   if vim.fn.bufnr(buf_name) ~= -1 then
     buf_name = buf_name .. "#" .. bufnr
@@ -1064,6 +1074,7 @@ function M.open(state, url, query_sql, opts)
     hidden_columns = {},
     elapsed_ms = opts and opts.elapsed_ms or nil,
     write_mode = (opts and opts.write == true) and true or false,
+    pinned = false,
   }
 
   -- Open in existing window (reuse_win) or a new horizontal split below
@@ -1071,8 +1082,11 @@ function M.open(state, url, query_sql, opts)
   if opts and opts.reuse_win and vim.api.nvim_win_is_valid(opts.reuse_win) then
     winid = opts.reuse_win
     local prev_buf = vim.api.nvim_win_get_buf(winid)
+    -- Inherit pin state before replacing (covers refresh, tab-view switches, apply).
+    local prev_was_pinned = M._sessions[prev_buf] and M._sessions[prev_buf].pinned or false
     vim.api.nvim_win_set_buf(winid, bufnr)
     vim.api.nvim_set_current_win(winid)  -- focus grip window (Issue #3)
+    if prev_was_pinned then M._sessions[bufnr].pinned = true end
     -- Clean up old grip session to prevent stale entries causing duplicate windows
     if prev_buf ~= bufnr and M._sessions[prev_buf] then
       local old_s = M._sessions[prev_buf]
@@ -1087,8 +1101,11 @@ function M.open(state, url, query_sql, opts)
     if content_win then
       winid = content_win
       local prev_buf = vim.api.nvim_win_get_buf(winid)
+      -- Inherit pin state before replacing.
+      local prev_was_pinned = M._sessions[prev_buf] and M._sessions[prev_buf].pinned or false
       vim.api.nvim_win_set_buf(winid, bufnr)
       vim.api.nvim_set_current_win(winid)
+      if prev_was_pinned then M._sessions[bufnr].pinned = true end
       -- Clean up old grip session if we replaced a grid
       if prev_buf ~= bufnr and M._sessions[prev_buf] then
         local old_s = M._sessions[prev_buf]
@@ -4530,6 +4547,89 @@ function M._setup_keymaps(bufnr)
     require("dadbod-grip").do_fill_rows(math.min(50, n))
   end, "AI-generated staged rows (GripFill)")
 
+  -- gL: pin / unpin this result (exclude from auto-reuse by query pad)
+  kmap("grid_pin", function()
+    local session = M._sessions[bufnr]
+    if not session then return end
+    if not session.pinned then
+      -- Check pinned_max cap before pinning
+      local limit = require("dadbod-grip").get_opts().pinned_max
+      if limit then
+        local count = 0
+        for _, s in pairs(M._sessions) do
+          if s.pinned then count = count + 1 end
+        end
+        if count >= limit then
+          vim.notify(string.format("Pin limit reached (%d). Unpin a result first (gL).", limit), vim.log.levels.WARN)
+          return
+        end
+      end
+      session.pinned = true
+      -- Append [pinned] to buffer name
+      local cur_name = vim.api.nvim_buf_get_name(bufnr)
+      if not cur_name:match("%[pinned%]") then
+        pcall(vim.api.nvim_buf_set_name, bufnr, cur_name .. " [pinned]")
+      end
+      vim.notify("Result pinned (gL to unpin, gJ to switch)", vim.log.levels.INFO)
+    else
+      session.pinned = false
+      -- Remove [pinned] suffix from buffer name
+      local cur_name = vim.api.nvim_buf_get_name(bufnr)
+      pcall(vim.api.nvim_buf_set_name, bufnr, cur_name:gsub("%s*%[pinned%]", ""))
+      vim.notify("Result unpinned", vim.log.levels.INFO)
+    end
+    _update_badge(bufnr)
+  end, "Pin/unpin result (exclude from auto-reuse)")
+
+  -- gJ: result switcher: pick from all live grip grid sessions
+  kmap("grid_results", function()
+    local items = {}
+    for bnum, s in pairs(M._sessions) do
+      local win_id = nil
+      for _, wid in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.api.nvim_win_get_buf(wid) == bnum then
+          win_id = wid
+          break
+        end
+      end
+      local name = vim.api.nvim_buf_get_name(bnum)
+      local short = name:match("^grip://(.+)$") or name
+      local rows = s.state and s.state.total_rows
+      local row_label = rows and (" [" .. rows .. " rows]") or ""
+      local pin_label = s.pinned and " [pinned]" or ""
+      local elapsed = s.elapsed_ms and (" " .. s.elapsed_ms .. "ms") or ""
+      local visible = win_id and "" or " (hidden)"
+      table.insert(items, {
+        bufnr   = bnum,
+        win_id  = win_id,
+        label   = short:gsub("%s*%[pinned%]", "") .. row_label .. elapsed .. pin_label .. visible,
+        pinned  = s.pinned,
+      })
+    end
+    if #items == 0 then
+      vim.notify("No open results", vim.log.levels.INFO)
+      return
+    end
+    -- Sort: pinned first, then by bufnr descending (most recent)
+    table.sort(items, function(a, b)
+      if a.pinned ~= b.pinned then return a.pinned end
+      return a.bufnr > b.bufnr
+    end)
+    require("dadbod-grip.grip_picker").open({
+      title = "Results",
+      items = items,
+      display = function(item) return (item.pinned and "" or " ") .. " " .. item.label end,
+      on_select = function(item)
+        if item.win_id then
+          vim.api.nvim_set_current_win(item.win_id)
+        else
+          -- Buffer exists but not visible: open in current window
+          vim.api.nvim_set_current_buf(item.bufnr)
+        end
+      end,
+    })
+  end, "Result switcher (all open results)")
+
   -- ── tab view keymaps (1-9) ───────────────────────────────────────────────
   -- 1: schema sidebar (already in grid = always primary: open/focus sidebar)
   kmap("tab_1", function()
@@ -4762,6 +4862,8 @@ function M.show_help(opts)
       "  gO        Open as editable table (read-only → table)",
       "  gC/<C-g>  Switch database connection",
       "  gW        Toggle watch mode (auto-refresh on timer)",
+      "  gL        Pin / unpin result (pinned: survives next query execution)",
+      "  gJ        Result switcher (all open results, pick to focus)",
       "  g!        Toggle write mode (apply overwrites file)",
       "  Q         Welcome screen (home)",
       "  q         Open query pad",

@@ -10,3 +10,4 @@ demo/*.duckdb
 demo/*.db
 assets/*.png
 assets/*.gif
+docs/plans

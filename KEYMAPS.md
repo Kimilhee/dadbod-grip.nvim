@@ -164,6 +164,8 @@ Note: explain query plan is accessible via `gQ` (removed from tab system).
 | `gG` | ER diagram float (tables + FK relationships) |
 | `gC` / `<C-g>` | Switch database connection |
 | `gW` | Toggle watch mode (auto-refresh on timer) |
+| `gL` | Pin / unpin result (pinned results survive subsequent query executions) |
+| `gJ` | Result switcher: pick from all open grip result buffers |
 | `g!` | Toggle write mode (apply overwrites file) |
 | `:GripAttach` | Attach external DB to DuckDB (Postgres, MySQL, SQLite, MotherDuck) |
 | `:GripDetach` | Detach attached database |
@@ -181,6 +183,7 @@ Note: explain query plan is accessible via `gQ` (removed from tab system).
 |-----|--------|
 | `<C-p>` | Command palette (searchable action list) |
 | `<C-CR>` | Execute query |
+| `<S-CR>` | Execute and always open result in a new split (never reuses existing grid) |
 | (auto) | SQL completion fires as you type: tables, columns, aliases, federation |
 | `<C-Space>` | Manually trigger SQL completion |
 | `<C-x><C-o>` | SQL completion: Vim-standard omnifunc / nvim-cmp source |
@@ -225,7 +228,7 @@ Note: explain query plan is accessible via `gQ` (removed from tab system).
 
 Available for future features. Check this list before assigning a new `g` keymap:
 
-**Uppercase (free):** `gB`, `gJ`, `gK`, `gL`, `gM`, `gU`, `gZ`
+**Uppercase (free):** `gB`, `gK`, `gM`, `gU`, `gZ`
 **Lowercase (free in grid):** `gm`, `gr`
 **Lowercase (free in sidebar):** `gm`, `gr`
 

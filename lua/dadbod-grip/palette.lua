@@ -153,8 +153,11 @@ local function _build_actions()
     act("[fk]       FK back navigation",     k("grid_fk_back"),     "Return from FK drill-down to the previous table",             { "grid" }),
 
     -- ── DDL / workflow ────────────────────────────────────────────────────
-    act("[ddl]      Watch mode (toggle)",    k("grid_watch"),       "Auto-refresh on timer (default 5s)",                          { "grid" }),
-    act("[ddl]      Open as editable",       k("grid_open_edit"),   "Reload read-only query result as a full editable table",      { "grid" }),
+    act("[ddl]      Watch mode (toggle)",    k("grid_watch"),          "Auto-refresh on timer (default 5s)",                          { "grid" }),
+    act("[ddl]      Open as editable",       k("grid_open_edit"),      "Reload read-only query result as a full editable table",      { "grid" }),
+    act("[ddl]      Pin / unpin result",     k("grid_pin"),            "Pin this result so it is never replaced by the next query",   { "grid" }),
+    act("[ddl]      Result switcher",        k("grid_results"),        "Browse and focus all open grip result buffers",               { "grid" }),
+    act("[query]    Execute in new split",   k("qpad_execute_new"),    "Run query and always open result in a new split",             { "query" }),
   }
 
   -- Filter out nil entries (actions the user disabled with key = false).

@@ -149,9 +149,12 @@ M.defaults = {
   grid_write_mode  = "g!",       -- toggle write mode (apply overwrites file)
   grid_open_edit   = "gO",       -- reopen read-only result as editable table
   grid_fill        = "gA",       -- AI-generated staged rows (:GripFill)
+  grid_pin         = "gL",       -- pin/unpin result (exclude from auto-reuse)
+  grid_results     = "gJ",       -- result switcher (all open results)
 
   -- ── Query pad ──────────────────────────────────────────────────────────
   qpad_execute     = "<C-CR>",   -- execute full query
+  qpad_execute_new = "<S-CR>",   -- execute query, always open in new split
   qpad_save        = "<C-s>",    -- save query as named entry
   qpad_ai          = "gA",       -- AI SQL generation
   qpad_format      = "gF",       -- format SQL (external tool cascade → Lua fallback)

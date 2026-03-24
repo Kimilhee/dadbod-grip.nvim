@@ -161,13 +161,19 @@ local function ensure_buf(url)
 end
 
 --- Run SQL from the query pad and open results in a grip grid.
---- Reuses an existing grip grid window if one exists; closes extras.
-local function run_sql(url, sql)
+--- Reuses the first unpinned grip grid window; closes unpinned extras; never
+--- touches pinned results. Pass force_split=true to always open a new split.
+local function run_sql(url, sql, force_split)
   if not sql or sql:match("^%s*$") then
     vim.notify("Grip: empty query", vim.log.levels.WARN)
     return
   end
-  -- Find ALL existing grip grid windows (close extras, reuse the first)
+  if force_split then
+    local grip = require("dadbod-grip")
+    grip.open(sql, url, { from_pad = true, force_split = true })
+    return
+  end
+  -- Find ALL existing grip grid windows; skip pinned; close unpinned extras.
   local reuse_win = nil
   local view = require("dadbod-grip.view")
   for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -175,6 +181,8 @@ local function run_sql(url, sql)
     local is_grid = false
     -- Check session registry (definitive)
     if view._sessions[wbuf] then
+      -- Skip pinned results entirely: do not reuse, do not close.
+      if view._sessions[wbuf].pinned then goto continue end
       is_grid = true
     else
       -- Fallback: check buffer name pattern (grip://result, grip://tablename, etc.)
@@ -187,10 +195,11 @@ local function run_sql(url, sql)
       if not reuse_win then
         reuse_win = winid
       else
-        -- Close duplicate grid windows
+        -- Close unpinned duplicate grid windows
         pcall(vim.api.nvim_win_close, winid, true)
       end
     end
+    ::continue::
   end
   local grip = require("dadbod-grip")
   local run_opts = reuse_win and { reuse_win = reuse_win } or {}
@@ -306,6 +315,27 @@ local function setup_keymaps(bufnr, url)
     local sql = M.get_content()
     if sql then run_sql(cur_url(), sql) end
   end, { desc = "Grip: run query" })
+
+  -- qpad_execute_new: always open results in a new split (never reuse)
+  kmap("qpad_execute_new", "n", function()
+    local block = _block_under_cursor(bufnr)
+    if block and block:match("%S") then
+      run_sql(cur_url(), block, true)
+      return
+    end
+    local sql = M.get_content()
+    if sql then run_sql(cur_url(), sql, true) end
+  end, { desc = "Grip: run query in new split" })
+
+  kmap("qpad_execute_new", "v", function()
+    local esc = vim.api.nvim_replace_termcodes("<Esc>", true, false, true)
+    vim.api.nvim_feedkeys(esc, "nx", false)
+    local start_line = vim.fn.line("'<")
+    local end_line   = vim.fn.line("'>")
+    local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+    if #lines == 0 then return end
+    run_sql(cur_url(), table.concat(lines, "\n"), true)
+  end, { desc = "Grip: run selection in new split" })
 
   if require("dadbod-grip").get_opts().completion then
     setup_completion_keymaps(bufnr)
