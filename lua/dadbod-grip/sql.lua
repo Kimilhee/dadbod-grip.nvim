@@ -33,6 +33,23 @@ function M.quote_ident(name)
 end
 local quote_ident = M.quote_ident
 
+-- Strip outer quotes from each part of a possibly schema-qualified identifier.
+-- Inverse of quote_ident: "public"."Participant" → public.Participant
+-- Handles double-quotes, backticks, and escaped internal quotes.
+-- Bare identifiers pass through unchanged.
+function M.unquote_ident(name)
+  local parts = {}
+  for part in tostring(name):gmatch("[^.]+") do
+    if part:match('^"') and part:match('"$') then
+      part = part:sub(2, -2):gsub('""', '"')
+    elseif part:match("^`") and part:match("`$") then
+      part = part:sub(2, -2):gsub("``", "`")
+    end
+    table.insert(parts, part)
+  end
+  return table.concat(parts, ".")
+end
+
 -- M.build_update(table_name, pk_values, changes) → string
 -- pk_values: { col = "val", ... }
 -- changes:   { col = new_val, ... }  (data.NULL_SENTINEL means SQL NULL)

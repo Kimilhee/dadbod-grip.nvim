@@ -175,6 +175,45 @@ test("build_delete: non-nil pk value still uses = (regression guard)", function(
   assert(not result:find("IS NULL", 1, true), "should not have IS NULL for real pk")
 end)
 
+-- ── unquote_ident() ─────────────────────────────────────────────────────────
+
+test("unquote_ident: bare identifier passes through", function()
+  eq(sql.unquote_ident("users"), "users")
+end)
+
+test("unquote_ident: strips double quotes", function()
+  eq(sql.unquote_ident('"Participant"'), "Participant")
+end)
+
+test("unquote_ident: strips backticks", function()
+  eq(sql.unquote_ident("`tablename`"), "tablename")
+end)
+
+test("unquote_ident: un-escapes doubled double quotes", function()
+  eq(sql.unquote_ident('"my""table"'), 'my"table')
+end)
+
+test("unquote_ident: un-escapes doubled backticks", function()
+  eq(sql.unquote_ident("`my``table`"), "my`table")
+end)
+
+test("unquote_ident: schema-qualified double-quoted", function()
+  eq(sql.unquote_ident('"public"."Participant"'), "public.Participant")
+end)
+
+test("unquote_ident: schema-qualified bare", function()
+  eq(sql.unquote_ident("public.users"), "public.users")
+end)
+
+test("unquote_ident: mixed quoting (schema bare, table quoted)", function()
+  eq(sql.unquote_ident('public."Participant"'), "public.Participant")
+end)
+
+test("unquote_ident: roundtrip with quote_ident", function()
+  eq(sql.unquote_ident(sql.quote_ident("users")), "users")
+  eq(sql.unquote_ident(sql.quote_ident("public.users")), "public.users")
+end)
+
 -- ── summary ─────────────────────────────────────────────────────────────────
 print(string.format("\nsql_spec: %d passed, %d failed", pass, fail))
 if fail > 0 then os.exit(1) end

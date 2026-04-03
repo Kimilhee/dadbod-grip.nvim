@@ -88,10 +88,10 @@ test("resolve_query: table name returns table spec", function()
   eq(tbl, "users", "table_name")
 end)
 
-test("resolve_query: SELECT returns raw spec", function()
+test("resolve_query: SELECT extracts table name from FROM clause", function()
   local spec, tbl = grip._resolve_query("SELECT * FROM orders", 50)
   assert(spec, "spec should not be nil")
-  eq(tbl, nil, "table_name should be nil for raw queries")
+  eq(tbl, "orders", "table_name should be extracted from SELECT")
 end)
 
 test("resolve_query: WITH returns raw spec", function()
@@ -99,9 +99,10 @@ test("resolve_query: WITH returns raw spec", function()
   assert(spec, "spec should not be nil")
 end)
 
-test("resolve_query: TABLE returns raw spec", function()
-  local spec = grip._resolve_query("TABLE orders", 50)
+test("resolve_query: TABLE extracts table name", function()
+  local spec, tbl = grip._resolve_query("TABLE orders", 50)
   assert(spec, "spec should not be nil")
+  eq(tbl, "orders", "TABLE should extract table name")
 end)
 
 test("resolve_query: nil with expand stub returns table spec", function()
@@ -123,9 +124,82 @@ test("resolve_query: empty string with empty expand returns nil + error", functi
 end)
 
 test("resolve_query: lowercase 'select' returns raw spec", function()
+  local spec = grip._resolve_query("select 1", 50)
+  assert(spec, "spec should not be nil")
+end)
+
+-- ── resolve_query: table extraction from SELECT/TABLE ────────────────────────
+
+test("resolve_query: SELECT with double-quoted PascalCase table", function()
+  local spec, tbl = grip._resolve_query('SELECT * FROM "Participant"', 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "Participant", "should unquote double-quoted table name")
+end)
+
+test("resolve_query: SELECT with backtick-quoted table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM `my_table`", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "my_table", "should unquote backtick-quoted table name")
+end)
+
+test("resolve_query: SELECT with schema-qualified table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM public.users", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "public.users", "should extract schema-qualified table name")
+end)
+
+test("resolve_query: SELECT with schema-qualified quoted table", function()
+  local spec, tbl = grip._resolve_query('SELECT * FROM "public"."Participant"', 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "public.Participant", "should unquote schema-qualified quoted table")
+end)
+
+test("resolve_query: SELECT with WHERE clause still extracts table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM orders WHERE id = 1", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "orders", "should extract table when WHERE clause follows")
+end)
+
+test("resolve_query: SELECT with JOIN returns nil table (ambiguous)", function()
+  local spec, tbl = grip._resolve_query("SELECT a.*, b.* FROM users a JOIN orders b ON a.id = b.user_id", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, nil, "should return nil for JOINs")
+end)
+
+test("resolve_query: SELECT with LEFT JOIN returns nil table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM users LEFT JOIN orders ON users.id = orders.user_id", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, nil, "should return nil for LEFT JOINs")
+end)
+
+test("resolve_query: SELECT with comma-join returns nil table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM users, orders WHERE users.id = orders.user_id", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, nil, "should return nil for comma-joins")
+end)
+
+test("resolve_query: SELECT from subquery returns nil table", function()
+  local spec, tbl = grip._resolve_query("SELECT * FROM (SELECT 1) t", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, nil, "should return nil for subqueries")
+end)
+
+test("resolve_query: select 1 (no FROM) returns nil table", function()
   local spec, tbl = grip._resolve_query("select 1", 50)
   assert(spec, "spec should not be nil")
-  eq(tbl, nil, "table_name should be nil")
+  eq(tbl, nil, "should return nil when no FROM clause")
+end)
+
+test("resolve_query: TABLE with quoted name extracts unquoted", function()
+  local spec, tbl = grip._resolve_query('TABLE "Participant"', 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "Participant", "TABLE should unquote table name")
+end)
+
+test("resolve_query: multiline SELECT extracts table", function()
+  local spec, tbl = grip._resolve_query("SELECT *\nFROM orders\nWHERE id > 0", 50)
+  assert(spec, "spec should not be nil")
+  eq(tbl, "orders", "should extract table from multiline SELECT")
 end)
 
 -- ── resolve_query: file-as-table ─────────────────────────────────────────────

@@ -4,10 +4,22 @@
 
 local db_util  = require("dadbod-grip.db")
 local adapters = require("dadbod-grip.adapters")
+local sql_util = require("dadbod-grip.sql")
 
 local M = {}
 
 local DEFAULT_TIMEOUT = 10000
+
+--- Split a possibly schema-qualified table name and unquote both parts.
+--- information_schema stores bare names, so quoted identifiers must be stripped.
+local function split_table_name(table_name, default_schema)
+  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
+  if not schema then
+    schema = default_schema
+    tbl = table_name
+  end
+  return sql_util.unquote_ident(schema), sql_util.unquote_ident(tbl)
+end
 
 --- Parse a dadbod-style MySQL URL into connection components.
 --- "mysql://user:pass@host:port/dbname" → {user, pass, host, port, dbname}
@@ -159,11 +171,7 @@ function M.get_primary_keys(table_name, url)
   local parsed = parse_url(url)
   if not parsed then return {}, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed.dbname)
 
   local sql_str = string.format([[
     SELECT column_name
@@ -195,11 +203,7 @@ function M.get_column_info(table_name, url)
   local parsed = parse_url(url)
   if not parsed then return nil, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed.dbname)
 
   local info_sql = string.format([[
     SELECT
@@ -254,11 +258,7 @@ function M.get_foreign_keys(table_name, url)
   local parsed = parse_url(url)
   if not parsed then return {}, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed.dbname)
 
   local fk_sql = string.format([[
     SELECT
@@ -394,11 +394,7 @@ function M.get_indexes(table_name, url)
   local parsed_url = parse_url(url)
   if not parsed_url then return {}, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed_url.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed_url.dbname)
 
   local idx_sql = string.format([[
     SELECT
@@ -442,11 +438,7 @@ function M.get_constraints(table_name, url)
   local parsed = parse_url(url)
   if not parsed then return {}, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed.dbname)
 
   -- MySQL 8.0+ supports CHECK constraints; older versions silently return no rows
   local sql_str = string.format([[
@@ -497,11 +489,7 @@ function M.get_table_stats(table_name, url)
   local parsed_url = parse_url(url)
   if not parsed_url then return nil, "Invalid MySQL URL: " .. url end
 
-  local schema, tbl = table_name:match("^([^.]+)%.(.+)$")
-  if not schema then
-    schema = parsed_url.dbname
-    tbl = table_name
-  end
+  local schema, tbl = split_table_name(table_name, parsed_url.dbname)
 
   local stats_sql = string.format([[
     SELECT

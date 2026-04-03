@@ -99,7 +99,43 @@ local function resolve_query(arg, page_size)
   -- Detect statement type
   local upper = arg:upper():match("^%s*(%u+)")
   if upper == "SELECT" or upper == "TABLE" then
-    return query.new_raw(arg, page_size), nil
+    local table_name = nil
+    local flat = arg:gsub("\n", " ")
+    if upper == "TABLE" then
+      -- TABLE <name> is always a single table
+      local raw = flat:match('^%s*[Tt][Aa][Bb][Ll][Ee]%s+"([^"]+)"')
+        or flat:match("^%s*[Tt][Aa][Bb][Ll][Ee]%s+`([^`]+)`")
+        or flat:match("^%s*[Tt][Aa][Bb][Ll][Ee]%s+([%w_%.]+)")
+      if raw then table_name = sql.unquote_ident(raw) end
+    else
+      -- SELECT: extract from FROM clause for simple single-table queries
+      local after_from = flat:match("[Ff][Rr][Oo][Mm]%s+(.*)")
+      if after_from and not after_from:match("^%s*%(") then
+        -- Match full token including quotes (handles "schema"."table" compound)
+        local full_token = after_from:match('^"[^"]+"%.%s*"[^"]+"')
+          or after_from:match('^`[^`]+`%.%s*`[^`]+`')
+          or after_from:match('^"[^"]+"')
+          or after_from:match("^`[^`]+`")
+          or after_from:match("^[%w_%.]+")
+        if full_token then
+          -- Extract the FROM clause up to WHERE/ORDER/GROUP/HAVING/LIMIT/; to check for joins
+          local remainder = after_from:sub(#full_token + 1):upper()
+          local from_clause = remainder:match("^(.-)%f[%u]WHERE%f[^%u]")
+            or remainder:match("^(.-)%f[%u]ORDER%f[^%u]")
+            or remainder:match("^(.-)%f[%u]GROUP%f[^%u]")
+            or remainder:match("^(.-)%f[%u]HAVING%f[^%u]")
+            or remainder:match("^(.-)%f[%u]LIMIT%f[^%u]")
+            or remainder:match("^(.-)%s*;")
+            or remainder
+          local has_join = from_clause:match("%f[%u]JOIN%f[^%u]")
+          local has_comma = from_clause:match(",")
+          if not has_join and not has_comma then
+            table_name = sql.unquote_ident(full_token)
+          end
+        end
+      end
+    end
+    return query.new_raw(arg, page_size), table_name
   end
   -- WITH can be a read-only CTE (SELECT) or a mutating CTE (UPDATE/DELETE/INSERT).
   -- Scan for mutation keywords to decide; default to SELECT if none found.

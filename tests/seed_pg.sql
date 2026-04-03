@@ -337,6 +337,25 @@ INSERT INTO type_zoo (
    NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+-- ── "Participant" ────────────────────────────────────────────────────────
+-- PascalCase quoted table: reproduces #8 (PK detection for quoted identifiers).
+-- Prisma, Sequelize, and other ORMs generate PascalCase table names.
+DROP TABLE IF EXISTS "Participant" CASCADE;
+
+CREATE TABLE "Participant" (
+  id         SERIAL PRIMARY KEY,
+  "firstName" VARCHAR(100) NOT NULL,
+  "lastName"  VARCHAR(100) NOT NULL,
+  email      VARCHAR(255),
+  "createdAt" TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO "Participant" ("firstName", "lastName", email) VALUES
+  ('Ada',    'Lovelace',  'ada@example.com'),
+  ('Grace',  'Hopper',    'grace@example.com'),
+  ('Alan',   'Turing',    'alan@example.com'),
+  ('Claude', 'Shannon',   'claude@example.com');
+
 -- ── long_values ──────────────────────────────────────────────────────────
 -- Cells with 500+ char strings, multiline text, SQL injection attempts
 CREATE TABLE long_values (
