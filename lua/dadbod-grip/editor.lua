@@ -11,6 +11,8 @@
 -- This means the editor is a real mini-buffer: full Vim motions available.
 -- The footer updates live to show INSERT vs NORMAL hints.
 
+local ui = require("dadbod-grip.ui")
+
 local M = {}
 
 local _ag = vim.api.nvim_create_augroup("DadbodGripEditor", { clear = true })
@@ -109,7 +111,7 @@ function M.open(prompt, initial_value, on_save, opts)
     width = width,
     height = height,
     style = "minimal",
-    border = "rounded",
+    border = ui.border(),
     title = " " .. (prompt or "edit") .. " ",
     title_pos = "center",
     footer     = "  INSERT  <CR>=save  <Esc>=normal  ",
@@ -259,7 +261,7 @@ function M.show_error(title, lines)
     width = width,
     height = #lines,
     style = "minimal",
-    border = "rounded",
+    border = ui.border(),
     title = " " .. (title or "Error") .. " ",
     title_pos = "center",
     zindex = 70,

@@ -3,6 +3,12 @@
 
 local M = {}
 
+--- Return the configured float border style.
+--- Lazy-requires init to avoid circular dependency.
+function M.border()
+  return require("dadbod-grip").get_opts().border
+end
+
 --- Show an animated spinner float, run fn(), then clear the float.
 ---
 --- IMPORTANT: fn() must be synchronous OR use vim.wait() for async work.
@@ -34,7 +40,7 @@ function M.blocking(msg, fn)
   local ei = vim.o.eventignore
   vim.o.eventignore = "all"
   local win = vim.api.nvim_open_win(buf, false, {
-    relative = "editor", style = "minimal", border = "rounded",
+    relative = "editor", style = "minimal", border = M.border(),
     width    = w, height = 3,
     row      = math.floor((vim.o.lines   - 3) / 2),
     col      = math.floor((vim.o.columns - w) / 2),

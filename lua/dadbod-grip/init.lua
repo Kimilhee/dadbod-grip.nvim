@@ -25,6 +25,7 @@ local OPTS = {
   connections_path = nil,
   picker      = "builtin",
   pinned_max  = nil,
+  border      = "rounded",
 }
 
 --- Return a shallow copy of the current options.
@@ -33,7 +34,8 @@ function M.get_opts()
   return { limit = OPTS.limit, max_col_width = OPTS.max_col_width,
            timeout = OPTS.timeout, completion = OPTS.completion,
            connections_path = OPTS.connections_path,
-           picker = OPTS.picker, pinned_max = OPTS.pinned_max }
+           picker = OPTS.picker, pinned_max = OPTS.pinned_max,
+           border = OPTS.border }
 end
 
 -- ── helpers ───────────────────────────────────────────────────────────────
@@ -1493,7 +1495,7 @@ function M.open_welcome()
       row      = math.floor((vim.o.lines   - sh - 4) / 2),
       col      = math.floor((vim.o.columns - sw - 2) / 2),
       style    = "minimal",
-      border   = "rounded",
+      border   = ui.border(),
       zindex   = 60,
     })
     vim.bo[sbuf].modifiable = false
@@ -1529,6 +1531,7 @@ end
 ---@field ai? DadbodGripAIOpts   AI SQL generation config
 ---@field keymaps? table         Key overrides: { action_name = "key" } or { action_name = false }
 ---@field pinned_max? integer    Max number of pinned results allowed (nil = unlimited)
+---@field border? string|table   Float window border style (default: "rounded")
 
 ---Setup dadbod-grip with user options.
 ---@param opts? DadbodGripOpts
@@ -1546,6 +1549,7 @@ function M.setup(opts)
     ai            = { opts.ai,             function(v) return v == nil or type(v) == "table" or v == false end, "table, false, or nil" },
     keymaps       = { opts.keymaps,        "table",   true },
     pinned_max    = { opts.pinned_max,     "number",  true },
+    border        = { opts.border, function(v) return v == nil or type(v) == "string" or type(v) == "table" end, "string, table, or nil" },
   })
   OPTS.limit        = opts.limit        or 100
   OPTS.max_col_width = opts.max_col_width or 40
@@ -1554,6 +1558,7 @@ function M.setup(opts)
   OPTS.connections_path = opts.connections_path or nil
   OPTS.picker = opts.picker or "builtin"
   if opts.pinned_max ~= nil then OPTS.pinned_max = opts.pinned_max end
+  if opts.border ~= nil then OPTS.border = opts.border end
 
   -- Keymap overrides: stored at module level for keymaps.get() to read.
   if opts.keymaps then
@@ -1859,7 +1864,7 @@ function M.setup(opts)
       width = width,
       height = height,
       style = "minimal",
-      border = "rounded",
+      border = ui.border(),
       title = " Query Health ",
       title_pos = "center",
     })

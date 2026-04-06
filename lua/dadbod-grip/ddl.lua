@@ -3,6 +3,7 @@
 
 local db   = require("dadbod-grip.db")
 local sql  = require("dadbod-grip.sql")
+local ui   = require("dadbod-grip.ui")
 
 local M = {}
 
@@ -34,7 +35,7 @@ local function confirm_ddl(title, ddl_sql, callback)
     width = width,
     height = height,
     style = "minimal",
-    border = "rounded",
+    border = ui.border(),
     title = " " .. title .. " ",
     title_pos = "center",
     zindex = 60,
@@ -92,7 +93,7 @@ local function destructive_confirm(title, ddl_sql, confirm_word, callback)
     width = width,
     height = height,
     style = "minimal",
-    border = "rounded",
+    border = ui.border(),
     title = " Confirm ",
     title_pos = "center",
     zindex = 60,

@@ -572,7 +572,8 @@ require("dadbod-grip").setup({
   timeout          = 30000,    -- query timeout in ms (default: 10000; raise for slow tunnels)
   completion       = true,     -- set false to use blink.cmp/nvim-cmp instead
   connections_path = nil,      -- absolute path to a shared connections.json file
-  picker           = "builtin", -- "builtin", "telescope", or "snacks"
+  border           = "rounded",
+  picker           = "builtin",-- "builtin", "telescope", or "snacks"
 })
 ```
 

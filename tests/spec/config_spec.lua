@@ -111,6 +111,37 @@ test("picker resets to builtin on empty setup", function()
   eq(grip.get_opts().picker, "builtin", "reset to builtin")
 end)
 
+--- border config
+
+test("border defaults to rounded", function()
+  grip.setup({})
+  eq(grip.get_opts().border, "rounded", "default rounded")
+end)
+
+test("border accepts a string", function()
+  grip.setup({ border = "single" })
+  eq(grip.get_opts().border, "single", "string border")
+end)
+
+test("border accepts a table", function()
+  grip.setup({ border = { "▗", "▄", "▖", "▌", "▘", "▀", "▝", "▐" } })
+  local b = grip.get_opts().border
+  assert(type(b) == "table", "should be table, got " .. type(b))
+  eq(#b, 8, "table length")
+end)
+
+test("border persists across empty setup (same as pinned_max)", function()
+  grip.setup({ border = "single" })
+  grip.setup({})
+  eq(grip.get_opts().border, "single", "preserved after no-arg setup")
+end)
+
+test("ui.border() returns configured value", function()
+  grip.setup({ border = "double" })
+  local ui = require("dadbod-grip.ui")
+  eq(ui.border(), "double", "ui.border() matches config")
+end)
+
 --- Restore defaults
 grip.setup({})
 

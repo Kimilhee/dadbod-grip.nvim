@@ -4,6 +4,7 @@
 
 local db   = require("dadbod-grip.db")
 local sql  = require("dadbod-grip.sql")
+local ui   = require("dadbod-grip.ui")
 
 local M = {}
 
@@ -228,7 +229,7 @@ function M.open(table_name, url, grip_win)
     width = width,
     height = height,
     style = "minimal",
-    border = "rounded",
+    border = ui.border(),
     title = " Table Properties ",
     title_pos = "center",
     zindex = 50,

@@ -1015,7 +1015,7 @@ local function setup_keymaps(url)
       width = max_w,
       height = #lines,
       style = "minimal",
-      border = "rounded",
+      border = ui.border(),
       title = " Schema Help ",
       title_pos = "center",
       zindex = 50,

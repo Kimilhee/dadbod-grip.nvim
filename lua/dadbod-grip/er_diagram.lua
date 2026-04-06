@@ -489,7 +489,7 @@ function M.show(url, scroll_to)
   local col    = math.floor((vim.o.columns - width)  / 2)
 
   local winid = vim.api.nvim_open_win(bufnr, true, {
-    relative = "editor", style = "minimal", border = "rounded",
+    relative = "editor", style = "minimal", border = ui.border(),
     width = width, height = height, row = row, col = col,
   })
   vim.wo[winid].wrap       = false

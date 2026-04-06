@@ -30,6 +30,8 @@
 --   │  Enter:select  /:filter  q│  ╰────────────────────────────────────────╯
 --   ╰───────────────────────────╯
 
+local ui = require("dadbod-grip.ui")
+
 local M = {}
 
 local _ag = vim.api.nvim_create_augroup("DadbodGripPicker", { clear = true })
@@ -136,7 +138,7 @@ function M.open(opts)
       width       = w,
       height      = h,
       style       = "minimal",
-      border      = "rounded",
+      border      = ui.border(),
       title       = " " .. title .. " ",
       title_pos   = "center",
       zindex      = 55,
@@ -153,7 +155,7 @@ function M.open(opts)
           width      = pvw,
           height     = h,
           style      = "minimal",
-          border     = "rounded",
+          border     = ui.border(),
           title      = " Preview ",
           title_pos  = "center",
           focusable  = false,
