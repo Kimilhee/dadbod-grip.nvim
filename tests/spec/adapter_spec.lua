@@ -615,13 +615,13 @@ test("mysql query: MariaDB uses --batch flag", function()
   mysql._set_mariadb(false)
 end)
 
-test("mysql query: MySQL uses --csv flag", function()
+test("mysql query: MySQL uses --batch flag", function()
   mysql._set_mariadb(false)
   with_executable(function()
-    local args = capture_system_args("id\n1\n", function()
+    local args = capture_system_args("id\t1\n", function()
       mysql.query("SELECT 1", "mysql://root@localhost/test")
     end)
-    has_arg(args, "--csv", "MySQL should use --csv")
+    has_arg(args, "--batch", "MySQL should use --batch")
   end)
 end)
 
@@ -716,18 +716,18 @@ end)
 
 test("mysql get_schema_batch: returns columns keyed by table name", function()
   mysql._set_mariadb(false)
-  -- MySQL --csv output format
-  local csv_stdout = table.concat({
-    "table_name,column_name,data_type,is_nullable",
-    "customers,cust_id,int,NO",
-    "customers,region,varchar(255),YES",
-    "products,sku,varchar(50),NO",
-    '"products","price","decimal(10,2)","YES"',
+  -- MySQL --batch output format (tab-separated)
+  local tsv_stdout = table.concat({
+    "table_name\tcolumn_name\tdata_type\tis_nullable",
+    "customers\tcust_id\tint\tNO",
+    "customers\tregion\tvarchar(255)\tYES",
+    "products\tsku\tvarchar(50)\tNO",
+    "products\tprice\tdecimal(10,2)\tYES",
   }, "\n") .. "\n"
 
   local result
   with_executable(function()
-    with_system_mock(csv_stdout, "", 0, function()
+    with_system_mock(tsv_stdout, "", 0, function()
       result = mysql.get_schema_batch("mysql://root:pass@localhost/testdb")
     end)
   end)
@@ -760,7 +760,7 @@ test("mysql get_schema_batch: single subprocess call", function()
   vim.fn.executable = function() return 1 end
   vim.system = function(args, opts, cb)
     call_count = call_count + 1
-    local csv = "table_name,column_name,data_type,is_nullable\nt1,c1,int,NO\n"
+    local csv = "table_name\tcolumn_name\tdata_type\tis_nullable\nt1\tc1\tint\tNO\n"
     local r = { stdout = csv, stderr = "", code = 0 }
     if cb then cb(r) else return { wait = function() return r end } end
   end

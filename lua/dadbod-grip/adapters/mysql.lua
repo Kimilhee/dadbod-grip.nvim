@@ -74,18 +74,15 @@ local function detect_mariadb()
   return _is_mariadb
 end
 
---- Parse query output using the correct parser for the detected engine.
+--- Parse query output from mysql --batch (tab-separated).
 local function parse_output(stdout)
-  if detect_mariadb() then
-    return db_util.parse_batch(stdout)
-  end
-  return db_util.parse_csv(stdout)
+  return db_util.parse_batch(stdout)
 end
 
 --- Build mysql CLI args and run a query.
---- MariaDB gets --batch (no --csv support); MySQL gets --csv.
+--- Both MySQL and MariaDB use --batch (tab-separated output; --csv is not a mysql CLI flag).
 local function mysql_query(parsed, sql_str, timeout_ms)
-  local output_flag = detect_mariadb() and "--batch" or "--csv"
+  local output_flag = "--batch"
   local args = { "mysql", output_flag, "--init-command=SET sql_mode='ANSI_QUOTES,NO_BACKSLASH_ESCAPES'" }
   if parsed.host then
     args[#args + 1] = "-h"
