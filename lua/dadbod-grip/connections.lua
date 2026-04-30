@@ -295,12 +295,33 @@ local function read_gdbs()
   return result
 end
 
+--- Read live local DB containers (Docker labels). Empty list when the
+--- discovery option is disabled, docker is unavailable, or the daemon is
+--- down. Never throws.
+local function read_discovered_connections()
+  local opts = require("dadbod-grip").get_opts()
+  if opts.discovery == false then return {} end
+  local ok, mod = pcall(require, "dadbod-grip.sources.docker_localdb")
+  if not ok then return {} end
+  local result = mod.fetch()
+  return result and result.connections or {}
+end
+
 --- List all connections from all sources, deduplicated by URL and name.
 function M.list()
   local all = {}
   local seen = {}  -- keyed by URL; URL is the canonical identifier
 
-  -- File connections first (user-managed, sorted by last_used in pick())
+  -- Discovered connections first: live containers beat hand-edited static.
+  -- A user spinning up `just up` expects to see that stack at the top.
+  for _, c in ipairs(read_discovered_connections()) do
+    if not seen[c.url] then
+      seen[c.url] = true
+      table.insert(all, c)
+    end
+  end
+
+  -- File connections second (user-managed, sorted by last_used in pick())
   for _, c in ipairs(read_file_connections()) do
     if not seen[c.url] then
       seen[c.url] = true

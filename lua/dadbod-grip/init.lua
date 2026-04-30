@@ -26,6 +26,10 @@ local OPTS = {
   picker      = "builtin",
   pinned_max  = nil,
   border      = "rounded",
+  -- Auto-discover local Docker containers tagged with the
+  -- dev.localdb.* label set. See sources/docker_localdb.lua. Set false
+  -- to disable shelling out to `docker ps` on picker open.
+  discovery   = true,
 }
 
 --- Return a shallow copy of the current options.
@@ -35,7 +39,7 @@ function M.get_opts()
            timeout = OPTS.timeout, completion = OPTS.completion,
            connections_path = OPTS.connections_path,
            picker = OPTS.picker, pinned_max = OPTS.pinned_max,
-           border = OPTS.border }
+           border = OPTS.border, discovery = OPTS.discovery }
 end
 
 -- ── helpers ───────────────────────────────────────────────────────────────
@@ -1550,6 +1554,7 @@ function M.setup(opts)
     keymaps       = { opts.keymaps,        "table",   true },
     pinned_max    = { opts.pinned_max,     "number",  true },
     border        = { opts.border, function(v) return v == nil or type(v) == "string" or type(v) == "table" end, "string, table, or nil" },
+    discovery     = { opts.discovery, "boolean", true },
   })
   OPTS.limit        = opts.limit        or 100
   OPTS.max_col_width = opts.max_col_width or 40
@@ -1559,6 +1564,7 @@ function M.setup(opts)
   OPTS.picker = opts.picker or "builtin"
   if opts.pinned_max ~= nil then OPTS.pinned_max = opts.pinned_max end
   if opts.border ~= nil then OPTS.border = opts.border end
+  if opts.discovery ~= nil then OPTS.discovery = opts.discovery end
 
   -- Keymap overrides: stored at module level for keymaps.get() to read.
   if opts.keymaps then

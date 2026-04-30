@@ -72,6 +72,37 @@ An example database is included. `:GripStart` opens it with seventeen tables and
 
 Then `:checkhealth dadbod-grip` to verify your setup, `:GripStart` to explore the demo database, or `:GripConnect` to pick your own. Schema sidebar + query pad open automatically.
 
+### Auto-discovery of local Docker stacks
+
+The picker discovers running postgres containers on every open by reading
+Docker labels (the same convention DataGrip and Beekeeper Studio use).
+Add this to any `docker-compose.yml` and the stack appears in `:GripPick`
+the moment it starts, disappears when it stops, no editing of
+`~/.grip/connections.json` required:
+
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    ports:
+      - "${HOST_PORT:-5432}:5432"
+    labels:
+      dev.localdb.kind: postgres
+      dev.localdb.name: "my project ${BRANCH_SLUG}"
+      dev.localdb.user: postgres
+      dev.localdb.database: postgres
+      dev.localdb.password: postgres
+```
+
+Multiple worktrees on different ports just work: each stack shows up
+under its own name. Containers without these labels are ignored.
+
+To opt out (no shell-out to `docker ps` on picker open):
+
+```lua
+require("dadbod-grip").setup({ discovery = false })
+```
+
 ### Connection strings
 
 ```
