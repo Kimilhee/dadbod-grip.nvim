@@ -102,11 +102,16 @@ local function resolve_query(arg, page_size)
     return query.new_raw(file_sql, page_size), nil, path
   end
 
-  -- Detect statement type
-  local upper = arg:upper():match("^%s*(%u+)")
+  -- Detect statement type (strip leading -- comments before keyword detection)
+  -- Lua patterns don't support group quantifiers, so use a loop for multiple comment lines.
+  local arg_stripped = arg
+  while arg_stripped:match("^%s*%-%-[^\n]*\n") do
+    arg_stripped = arg_stripped:gsub("^%s*%-%-[^\n]*\n", "")
+  end
+  local upper = arg_stripped:upper():match("^%s*(%u+)")
   if upper == "SELECT" or upper == "TABLE" then
     local table_name = nil
-    local flat = arg:gsub("\n", " ")
+    local flat = arg_stripped:gsub("\n", " ")
     if upper == "TABLE" then
       -- TABLE <name> is always a single table
       local raw = flat:match('^%s*[Tt][Aa][Bb][Ll][Ee]%s+"([^"]+)"')

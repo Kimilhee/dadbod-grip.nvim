@@ -31,8 +31,16 @@ end
 
 --- Create a spec for a raw SELECT/WITH query.
 function M.new_raw(sql_str, page_size)
-  -- Strip trailing semicolons: raw SQL gets wrapped in a subquery
-  local cleaned = sql_str and sql_str:gsub(";%s*$", "") or sql_str
+  -- Strip trailing -- comment lines and semicolons: raw SQL gets wrapped in a subquery.
+  -- Trailing comments prevent semicolon detection, causing syntax errors inside the subquery.
+  local cleaned = sql_str or ""
+  local changed = true
+  while changed do
+    local prev = cleaned
+    cleaned = cleaned:gsub("%s*%-%-[^\n]*$", "")  -- trailing -- comment (and preceding whitespace/newline)
+    cleaned = cleaned:gsub(";%s*$", "")            -- trailing semicolon
+    changed = cleaned ~= prev
+  end
   return {
     table_name = nil,
     base_sql   = cleaned,
