@@ -56,6 +56,8 @@ nvim --headless -u tests/minimal_init.lua -l tests/run_specs.lua
 - Reuse existing UI/keymap/picker helpers before adding new plumbing.
 - Avoid new dependencies unless the user explicitly accepts the tradeoff.
 - Update docs when commands, keymaps, setup options, or public behavior change.
+- Bump `lua/dadbod-grip/version.lua` once per release commit, not once per
+  individual fix while iterating in the same commit.
 
 ## Testing
 
