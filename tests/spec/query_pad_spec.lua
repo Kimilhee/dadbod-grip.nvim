@@ -244,5 +244,134 @@ do
   close_win(w)
 end
 
+-- ── _statement_under_cursor ──────────────────────────────────────────────────
+
+do
+  local lines = {
+    "-- inspect users",
+    "SELECT * FROM users;",
+    "",
+    "-- remove old orders",
+    "DELETE FROM orders WHERE created_at < '2024-01-01';",
+    "",
+    "CREATE TABLE audit_log (id integer);",
+  }
+  eq(qp._statement_under_cursor(lines, 1), "SELECT * FROM users", "statement_under_cursor: ignores leading SELECT comment")
+  eq(qp._statement_under_cursor(lines, 4), "DELETE FROM orders WHERE created_at < '2024-01-01'", "statement_under_cursor: ignores leading DELETE comment")
+  eq(qp._statement_under_cursor(lines, 7), "CREATE TABLE audit_log (id integer)", "statement_under_cursor: CREATE statement")
+end
+
+do
+  local lines = {
+    "-- SELECT * FROM employee2",
+    "-- 주석 추가.",
+    "",
+    "delete FROM employee where id = 1;",
+  }
+  eq(qp._statement_under_cursor(lines, 4), "delete FROM employee where id = 1", "statement_under_cursor: DELETE after Korean comment")
+end
+
+do
+  local lines = {
+    "SELECT ';' AS semi;",
+    "DELETE FROM logs WHERE message = 'not;split';",
+  }
+  eq(qp._statement_under_cursor(lines, 1), "SELECT ';' AS semi", "statement_under_cursor: ignores semicolon in string")
+  eq(qp._statement_under_cursor(lines, 2), "DELETE FROM logs WHERE message = 'not;split'", "statement_under_cursor: next statement after string semicolon")
+end
+
+do
+  local lines = {
+    "SELECT 1; -- comment ; does not split",
+    "UPDATE users SET name = 'A' WHERE id = 1;",
+  }
+  eq(qp._statement_under_cursor(lines, 2), "UPDATE users SET name = 'A' WHERE id = 1", "statement_under_cursor: ignores semicolon in line comment")
+end
+
+do
+  local lines = {
+    "-- C-CR:run block or buffer",
+    "",
+    "-- comment only;",
+  }
+  eq(qp._statement_under_cursor(lines, 3), nil, "statement_under_cursor: comment-only statement is empty")
+end
+
+-- ── _visual_line_range ───────────────────────────────────────────────────────
+
+do
+  local b, w = buf_with_cursor({ "SELECT 1;", "SELECT 2;", "SELECT 3;" }, 1)
+  vim.cmd("normal! Vj")
+  local start_line, end_line = qp._visual_line_range()
+  eq(start_line, 1, "visual_line_range: forward selection start")
+  eq(end_line, 2, "visual_line_range: forward selection end")
+  vim.cmd("normal! \027")
+  close_win(w)
+  pcall(vim.api.nvim_buf_delete, b, { force = true })
+end
+
+do
+  local b, w = buf_with_cursor({ "SELECT 1;", "SELECT 2;", "SELECT 3;" }, 3)
+  vim.cmd("normal! Vk")
+  local start_line, end_line = qp._visual_line_range()
+  eq(start_line, 2, "visual_line_range: backward selection start")
+  eq(end_line, 3, "visual_line_range: backward selection end")
+  vim.cmd("normal! \027")
+  close_win(w)
+  pcall(vim.api.nvim_buf_delete, b, { force = true })
+end
+
+do
+  local line = "insert into employee SELECT * FROM emp2 where id = 1;"
+  local b, w = buf_with_cursor({ line }, 1)
+  local start_col = line:find("SELECT", 1, true)
+  vim.api.nvim_win_set_cursor(w, { 1, start_col - 1 })
+  vim.cmd("normal! v$")
+  eq(qp._visual_selection_text(b), "SELECT * FROM emp2 where id = 1;", "visual_selection_text: charwise selection is exact")
+  vim.cmd("normal! \027")
+  close_win(w)
+  pcall(vim.api.nvim_buf_delete, b, { force = true })
+end
+
+do
+  local b, w = buf_with_cursor({ "SELECT 1;", "SELECT 2;", "SELECT 3;" }, 2)
+  vim.cmd("normal! V")
+  eq(qp._visual_selection_text(b), "SELECT 2;", "visual_selection_text: linewise selection keeps whole selected line")
+  vim.cmd("normal! \027")
+  close_win(w)
+  pcall(vim.api.nvim_buf_delete, b, { force = true })
+end
+
+do
+  local grip = require("dadbod-grip")
+  grip.setup({ completion = false })
+
+  local orig_open = grip.open
+  local captured_sql = nil
+  grip.open = function(sql)
+    captured_sql = sql
+  end
+
+  qp.open("sqlite:test.db")
+  local bufnr = qp.get_pad_bufnr()
+  set_lines(bufnr, { "SELECT 1;", "SELECT 2;", "SELECT 3;" })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  vim.cmd("normal! V")
+
+  local callback = nil
+  for _, map in ipairs(vim.api.nvim_buf_get_keymap(bufnr, "v")) do
+    if map.desc == "Grip: run selection" then
+      callback = map.callback
+      break
+    end
+  end
+  assert(callback, "visual qpad_execute keymap should exist")
+  callback()
+
+  eq(captured_sql, "SELECT 2;", "visual qpad_execute: runs selected line only")
+  grip.open = orig_open
+  qp._set_pad_bufnr(nil)
+end
+
 print(string.format("\nquery_pad_spec: %d passed, %d failed", pass, fail))
 if fail > 0 then os.exit(1) end

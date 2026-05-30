@@ -117,14 +117,15 @@ local function ensure_buf(url)
     completion.register_cmp_source()
   end
   -- Pre-warm schema cache regardless of completion mode (blink/cmp sources need it too).
+  local bufnr_ref = _pad_bufnr
   vim.schedule(function()
-    local u = (vim.b[_pad_bufnr] and vim.b[_pad_bufnr].db) or vim.g.db
+    local u = (bufnr_ref and vim.api.nvim_buf_is_valid(bufnr_ref) and vim.b[bufnr_ref].db) or vim.g.db
     if u and u ~= "" then pcall(require("dadbod-grip.completion").get_schema, u) end
   end)
 
   -- Pre-fill with hint comment
   vim.api.nvim_buf_set_lines(_pad_bufnr, 0, -1, false, {
-    "-- C-CR:run block or buffer  gn:notebooks  gA:ai  go:tables  gh:hist  gq:saved  gb:schema  gC:conn",
+    "-- C-CR:run statement/block  gn:notebooks  gA:ai  go:tables  gh:hist  gq:saved  gb:schema  gC:conn",
     "",
   })
   -- Mark buffer as not modified after creation
@@ -246,6 +247,211 @@ local function _block_under_cursor(bufnr)
 end
 M._block_under_cursor = _block_under_cursor  -- exported for unit tests
 
+local function _is_pad_comment(line)
+  return line:match("^%-%- C%-CR:") or line:match("^%-%- AI generated:")
+end
+
+local function _clean_statement(sql)
+  local lines = vim.split(sql or "", "\n", { plain = true })
+  while #lines > 0 and lines[1]:match("^%s*$") do table.remove(lines, 1) end
+  while #lines > 0 and _is_pad_comment(lines[1]) do table.remove(lines, 1) end
+  while #lines > 0 and lines[1]:match("^%s*%-%-") do table.remove(lines, 1) end
+  while #lines > 0 and lines[1]:match("^%s*$") do table.remove(lines, 1) end
+  while #lines > 0 and lines[#lines]:match("^%s*%-%-") do table.remove(lines) end
+  while #lines > 0 and lines[#lines]:match("^%s*$") do table.remove(lines) end
+  local cleaned = table.concat(lines, "\n")
+  cleaned = cleaned:gsub("^%s*/%*.-%*/%s*", "")
+  cleaned = cleaned:gsub("%s*/%*.-%*/%s*$", "")
+  local executable = cleaned:gsub("%-%-[^\n]*", ""):gsub("/%*.-%*/", "")
+  if not executable:match("%S") then return nil end
+  return cleaned ~= "" and cleaned or nil
+end
+
+--- Return the semicolon-delimited SQL statement containing cursor_line.
+--- Comments and string literals are ignored while looking for semicolon
+--- boundaries, so `-- comment ;` and `'value;still string'` do not split.
+local function _statement_under_cursor(lines, cursor_line)
+  if not lines or #lines == 0 then return nil end
+
+  local text = table.concat(lines, "\n")
+  local statements = {}
+  local stmt_start = 1
+  local stmt_start_line = 1
+  local line = 1
+  local i = 1
+  local len = #text
+  local state = nil
+  local dollar_tag = nil
+
+  local function push_statement(end_pos, end_line)
+    local raw = text:sub(stmt_start, end_pos)
+    if raw:match("%S") then
+      table.insert(statements, {
+        start_line = stmt_start_line,
+        end_line = end_line,
+        sql = raw,
+      })
+    end
+  end
+
+  while i <= len do
+    local ch = text:sub(i, i)
+    local next_ch = text:sub(i + 1, i + 1)
+
+    if state == "line_comment" then
+      if ch == "\n" then
+        state = nil
+        line = line + 1
+      end
+      i = i + 1
+    elseif state == "block_comment" then
+      if ch == "*" and next_ch == "/" then
+        state = nil
+        i = i + 2
+      else
+        if ch == "\n" then line = line + 1 end
+        i = i + 1
+      end
+    elseif state == "single_quote" then
+      if ch == "'" and next_ch == "'" then
+        i = i + 2
+      elseif ch == "'" then
+        state = nil
+        i = i + 1
+      else
+        if ch == "\n" then line = line + 1 end
+        i = i + 1
+      end
+    elseif state == "double_quote" then
+      if ch == '"' and next_ch == '"' then
+        i = i + 2
+      elseif ch == '"' then
+        state = nil
+        i = i + 1
+      else
+        if ch == "\n" then line = line + 1 end
+        i = i + 1
+      end
+    elseif state == "backtick" then
+      if ch == "`" then state = nil end
+      if ch == "\n" then line = line + 1 end
+      i = i + 1
+    elseif state == "dollar_quote" then
+      if text:sub(i, i + #dollar_tag - 1) == dollar_tag then
+        state = nil
+        i = i + #dollar_tag
+      else
+        if ch == "\n" then line = line + 1 end
+        i = i + 1
+      end
+    else
+      local tag = text:match("^(%$[%w_]*%$)", i)
+      if ch == "-" and next_ch == "-" then
+        state = "line_comment"
+        i = i + 2
+      elseif ch == "/" and next_ch == "*" then
+        state = "block_comment"
+        i = i + 2
+      elseif ch == "'" then
+        state = "single_quote"
+        i = i + 1
+      elseif ch == '"' then
+        state = "double_quote"
+        i = i + 1
+      elseif ch == "`" then
+        state = "backtick"
+        i = i + 1
+      elseif tag then
+        state = "dollar_quote"
+        dollar_tag = tag
+        i = i + #tag
+      elseif ch == ";" then
+        push_statement(i - 1, line)
+        stmt_start = i + 1
+        stmt_start_line = line
+        local semicolon_line = line
+        local j = stmt_start
+        while j <= len do
+          local cur = text:sub(j, j)
+          local after = text:sub(j + 1, j + 1)
+          if cur == "\n" then
+            stmt_start_line = stmt_start_line + 1
+            j = j + 1
+          elseif cur:match("%s") then
+            j = j + 1
+          elseif stmt_start_line == semicolon_line and cur == "-" and after == "-" then
+            local nl = text:find("\n", j + 2, true)
+            if not nl then
+              j = len + 1
+              break
+            end
+            stmt_start_line = stmt_start_line + 1
+            j = nl + 1
+          elseif stmt_start_line == semicolon_line and cur == "/" and after == "*" then
+            local close = text:find("*/", j + 2, true)
+            local comment = close and text:sub(j, close + 1) or text:sub(j)
+            for _ in comment:gmatch("\n") do
+              stmt_start_line = stmt_start_line + 1
+            end
+            j = close and close + 2 or len + 1
+          else
+            break
+          end
+        end
+        stmt_start = j
+        i = i + 1
+      else
+        if ch == "\n" then line = line + 1 end
+        i = i + 1
+      end
+    end
+  end
+  push_statement(len, line)
+
+  for _, statement in ipairs(statements) do
+    if cursor_line >= statement.start_line and cursor_line <= statement.end_line then
+      return _clean_statement(statement.sql)
+    end
+  end
+
+  return nil
+end
+M._statement_under_cursor = _statement_under_cursor  -- exported for unit tests
+
+local function _visual_line_range()
+  local start_line = vim.fn.line("v")
+  local end_line = vim.api.nvim_win_get_cursor(0)[1]
+  if start_line > end_line then
+    start_line, end_line = end_line, start_line
+  end
+  return start_line, end_line
+end
+M._visual_line_range = _visual_line_range  -- exported for unit tests
+
+local function _visual_selection_text(bufnr)
+  local mode = vim.fn.mode(1)
+  local start_pos = vim.fn.getpos("v")
+  local start_line = start_pos[2]
+  local start_col = start_pos[3] - 1
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local end_line = cursor[1]
+  local end_col = cursor[2]
+
+  if start_line > end_line or (start_line == end_line and start_col > end_col) then
+    start_line, end_line = end_line, start_line
+    start_col, end_col = end_col, start_col
+  end
+
+  if mode == "V" or mode == "\022" then
+    local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+    return table.concat(lines, "\n")
+  end
+
+  local lines = vim.api.nvim_buf_get_text(bufnr, start_line - 1, start_col, end_line - 1, end_col + 1, {})
+  return table.concat(lines, "\n")
+end
+M._visual_selection_text = _visual_selection_text  -- exported for unit tests
+
 --- Scan the project root for .md and .sql files to use as notebooks.
 local function scan_notebooks()
   -- Walk up from cwd to find project root (same pattern as connections.lua)
@@ -298,23 +504,30 @@ local function setup_keymaps(bufnr, url)
     vim.keymap.set(mode, key, fn, o)
   end
 
-  -- qpad_execute: block-under-cursor takes priority; fall back to full buffer
+  -- qpad_execute: SQL fence block takes priority; otherwise run statement under cursor.
   kmap("qpad_execute", "n", function()
     local block = _block_under_cursor(bufnr)
     if block and block:match("%S") then
       run_sql(cur_url(), block)
       return
     end
-    local sql = M.get_content()
-    if sql then run_sql(cur_url(), sql) end
-  end, { desc = "Grip: run query or SQL block under cursor" })
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+    run_sql(cur_url(), _statement_under_cursor(lines, cursor_line))
+  end, { desc = "Grip: run statement or SQL block under cursor" })
 
   -- qpad_execute in insert mode too
   kmap("qpad_execute", "i", function()
     vim.cmd("stopinsert")
-    local sql = M.get_content()
-    if sql then run_sql(cur_url(), sql) end
-  end, { desc = "Grip: run query" })
+    local block = _block_under_cursor(bufnr)
+    if block and block:match("%S") then
+      run_sql(cur_url(), block)
+      return
+    end
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+    run_sql(cur_url(), _statement_under_cursor(lines, cursor_line))
+  end, { desc = "Grip: run statement" })
 
   -- qpad_execute_new: always open results in a new split (never reuse)
   kmap("qpad_execute_new", "n", function()
@@ -323,18 +536,16 @@ local function setup_keymaps(bufnr, url)
       run_sql(cur_url(), block, true)
       return
     end
-    local sql = M.get_content()
-    if sql then run_sql(cur_url(), sql, true) end
-  end, { desc = "Grip: run query in new split" })
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+    run_sql(cur_url(), _statement_under_cursor(lines, cursor_line), true)
+  end, { desc = "Grip: run statement in new split" })
 
   kmap("qpad_execute_new", "v", function()
-    local esc = vim.api.nvim_replace_termcodes("<Esc>", true, false, true)
-    vim.api.nvim_feedkeys(esc, "nx", false)
-    local start_line = vim.fn.line("'<")
-    local end_line   = vim.fn.line("'>")
-    local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
-    if #lines == 0 then return end
-    run_sql(cur_url(), table.concat(lines, "\n"), true)
+    local sql = _visual_selection_text(bufnr)
+    if not sql or sql == "" then return end
+    vim.cmd("normal! \027")
+    run_sql(cur_url(), sql, true)
   end, { desc = "Grip: run selection in new split" })
 
   if require("dadbod-grip").get_opts().completion then
@@ -343,14 +554,10 @@ local function setup_keymaps(bufnr, url)
 
   -- Visual qpad_execute: run selection (line-wise: runs all selected lines)
   kmap("qpad_execute", "v", function()
-    -- feedkeys Esc to exit visual mode and set '< '> marks, then run
-    local esc = vim.api.nvim_replace_termcodes("<Esc>", true, false, true)
-    vim.api.nvim_feedkeys(esc, "nx", false)
-    local start_line = vim.fn.line("'<")
-    local end_line = vim.fn.line("'>")
-    local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
-    if #lines == 0 then return end
-    run_sql(cur_url(), table.concat(lines, "\n"))
+    local sql = _visual_selection_text(bufnr)
+    if not sql or sql == "" then return end
+    vim.cmd("normal! \027")
+    run_sql(cur_url(), sql)
   end, { desc = "Grip: run selection" })
 
   -- qpad_save: save query

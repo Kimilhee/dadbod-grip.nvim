@@ -301,7 +301,7 @@ All commands are global and available after the plugin loads.
                                                                 *:GripQuery*
 :GripQuery [sql]
   Open a SQL query pad. Optionally pre-fill with a SQL string. Press
-  <C-CR> to execute the buffer contents into a grip grid.
+  <C-CR> to execute the statement under the cursor into a grip grid.
 
                                                                  *:GripSave*
 :GripSave [name]
@@ -736,8 +736,8 @@ below existing SQL with a blank separator. The pad is only pre-filled when
 it is empty (or contains only the hint comment). Your work is never lost.
 
 `<C-CR>` in visual mode runs only the selected lines. In normal or insert
-mode it runs the full buffer. `gA` reads existing pad content and modifies
-it rather than generating from scratch.
+mode it runs the semicolon-delimited SQL statement under the cursor. `gA`
+reads existing pad content and modifies it rather than generating from scratch.
 
 SQL completion is built in: table names, column names, aliases, and SQL
 keywords complete automatically as you type. In DuckDB federated sessions,
@@ -746,7 +746,8 @@ columns from all attached databases appear with schema-qualified names
 Works with nvim-cmp, blink.cmp, or standalone via `<C-Space>`.
 
 Query pad keymaps:
-  <C-CR>          Execute buffer contents into a grip grid (normal/insert)
+  <C-CR>          Execute statement under cursor into a grip grid
+                  (normal/insert)
   <C-CR>          Execute visual selection into a grip grid (visual mode)
   <S-CR>      Execute and always open result in a new split (never reuses
                   an existing grid, even an unpinned one)

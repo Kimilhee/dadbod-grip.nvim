@@ -199,7 +199,7 @@ work without credentials.
 
 - **Notebook picker** via `gn` from the grid, query pad, or schema sidebar. Scans `.md` and `.sql` files in your project and shows a preview of each.
 - **Block execution** via `<C-CR>` with cursor inside any `` ```sql ``` `` fence: that block's SQL executes, surrounding Markdown prose is untouched.
-- **Smart fallback**: cursor outside any fence runs the full buffer; visual selection always runs the selected text. Same key, context-aware behavior.
+- **Smart fallback**: cursor outside any fence runs the semicolon-delimited SQL statement under the cursor; visual selection always runs the selected text. Same key, context-aware behavior.
 - **No special format**: any Markdown file with SQL fences is a notebook. Write the question, then a SQL block, then what to look for in the result. Each block runs independently against the current connection.
 - **Demo notebook**: `:GripStart` loads `demo/softrear-internal.md` automatically — sixteen sections of a data quality investigation, runnable block by block.
 
@@ -207,7 +207,7 @@ work without credentials.
 - **ER diagram** via `gG` or `4`: a tree-spine float showing every table with PK/FK/column summary, arranged by FK depth with box-drawing connectors. Press `<CR>` on any table to open its grid. Press `f` to follow a foreign key and `H` to go back (breadcrumb trail updates). `Tab`/`S-Tab` cycle between tables. Press `gG` or `q` to close. Column names truncate gracefully; overflow columns show a right-aligned `+N` count. Works from the grid, the query pad, and the schema sidebar.
 - **Schema browser** via `:GripSchema` or `gb` showing a sidebar tree with columns, types, and PK/FK markers. `gb` opens/focuses the browser from any buffer; pressing `gb` from inside closes it.
 - **Table picker** via `:GripTables` or `gT` / `gt` providing a fuzzy finder with column preview. Available from all three buffers: grid, query pad, and sidebar. In the sidebar, `go` opens the table under cursor with `ORDER BY created_at / PK DESC` so the latest rows appear first.
-- **SQL query pad** via `:GripQuery` or `q`. A persistent scratch buffer that pipes results into editable grids. Clicking a table in the sidebar or picker never replaces pad content: new queries append below existing SQL with a blank separator so all your work stays intact. `<C-CR>` runs the visual selection or the full buffer; when cursor is inside a `` ```sql ``` `` fence, only that block runs. `gn` opens the notebook picker to load any `.md` or `.sql` file. `gA` reads existing pad content and modifies it rather than generating from scratch. Pressing `q` or `2` focuses the pad without overwriting anything.
+- **SQL query pad** via `:GripQuery` or `q`. A persistent scratch buffer that pipes results into editable grids. Clicking a table in the sidebar or picker never replaces pad content: new queries append below existing SQL with a blank separator so all your work stays intact. `<C-CR>` runs the visual selection or the semicolon-delimited statement under the cursor; when cursor is inside a `` ```sql ``` `` fence, only that block runs. `gn` opens the notebook picker to load any `.md` or `.sql` file. `gA` reads existing pad content and modifies it rather than generating from scratch. Pressing `q` or `2` focuses the pad without overwriting anything.
 - **Built-in SQL completion** with table names, column names, SQL keywords, and alias tracking. No extra plugins required. In DuckDB federated sessions, columns from all attached databases appear with schema-qualified names (e.g. `pg.users.email`). Works with nvim-cmp (source `dadbod_grip`), blink.cmp, or standalone via `<C-Space>` and auto-trigger.
 - **Saved queries** via `:GripSave` and `:GripLoad` persisting to project-local `.grip/queries/` files.
 - **Connection profiles** via `:GripConnect` or `gC` storing connections in `.grip/connections.json` with `g:dbs` backward compatibility. Connections auto-persist globally (`~/.grip/connections.json`) so they're available from any project. Connecting opens the full workspace (schema sidebar + query pad) automatically. The picker shows a **Local Files (cwd)** section listing `.csv`, `.parquet`, `.json`, `.xlsx`, and other supported files in your working directory so you can open them without typing a path. Press `s` to save a local file as a named connection. Each connection displays a session-scoped health indicator (`*` ok, `o` unknown, `x` failed); press `T` on any file-based connection to retest it instantly.
@@ -423,7 +423,7 @@ Note: explain query plan is at `gQ` (Query Doctor).
 
 | Key | Action |
 |-----|--------|
-| `<C-CR>` | Execute buffer (or SQL fence under cursor in notebooks) or selection (visual) into grip grid |
+| `<C-CR>` | Execute statement under cursor (or SQL fence under cursor in notebooks) or selection (visual) into grip grid |
 | `<S-CR>` | Execute and always open result in a new split (never reuses an existing grid) |
 | `<C-s>` | Save query with `:GripSave` |
 | `gn` | Notebook picker (load .md or .sql file from project) |

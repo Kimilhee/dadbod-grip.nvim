@@ -252,6 +252,16 @@ test("sqlite query: passes -init '' to skip .sqliterc", function()
   end)
 end)
 
+test("sqlite query: passes -- before SQL so leading comments are not CLI options", function()
+  with_executable(function()
+    local args = capture_system_args("col\nval\n", function()
+      sqlite.query("-- comment\nSELECT 1", "sqlite:test.db")
+    end)
+    eq(args[#args - 1], "--", "sqlite should stop option parsing before SQL")
+    eq(args[#args], "-- comment\nSELECT 1", "SQL remains last arg")
+  end)
+end)
+
 -- ── MySQL DEFAULT VALUES rewriting ───────────────────────────────────────────
 
 test("mysql execute: DEFAULT VALUES is rewritten", function()
