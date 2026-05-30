@@ -746,6 +746,30 @@ function M.update_table_sessions(old_name, new_name)
   end
 end
 
+function M.close_table_sessions(table_name, url)
+  for bufnr, session in pairs(M._sessions) do
+    if session.state
+        and session.state.table_name == table_name
+        and (not url or session.url == url) then
+      M._close_live_sql_float(session)
+      M._sessions[bufnr] = nil
+      pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    end
+  end
+end
+
+function M.refresh_table_sessions(table_name, url)
+  for bufnr, session in pairs(M._sessions) do
+    if session.state
+        and session.state.table_name == table_name
+        and (not url or session.url == url)
+        and session.on_refresh
+        and vim.api.nvim_buf_is_valid(bufnr) then
+      session.on_refresh(bufnr)
+    end
+  end
+end
+
 -- M.render(bufnr, state): wipes and rewrites buffer, reapplies extmarks
 function M.render(bufnr, state)
   local session = M._sessions[bufnr]

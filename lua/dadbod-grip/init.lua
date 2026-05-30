@@ -52,6 +52,48 @@ function M._render_if_visible(bufnr)
   end
 end
 
+local function parse_ddl_table(stmt_type, sql_str)
+  local flat = (sql_str or ""):gsub("\n", " ")
+  local function table_after(prefix)
+    local raw = flat:match(prefix .. '%s+("[^"]+"%s*%.%s*"[^"]+")')
+      or flat:match(prefix .. '%s+("[^"]+")')
+      or flat:match(prefix .. "%s+(`[^`]+`%s*%.%s*`[^`]+`)")
+      or flat:match(prefix .. "%s+(`[^`]+`)")
+      or flat:match(prefix .. "%s+([%w_%.]+)")
+    if raw then raw = raw:gsub("%s*%.%s*", ".") end
+    return raw
+  end
+
+  local raw
+  if stmt_type == "DROP" then
+    raw = table_after("[Dd][Rr][Oo][Pp]%s+[Tt][Aa][Bb][Ll][Ee]%s+[Ii][Ff]%s+[Ee][Xx][Ii][Ss][Tt][Ss]")
+      or table_after("[Dd][Rr][Oo][Pp]%s+[Tt][Aa][Bb][Ll][Ee]")
+  elseif stmt_type == "ALTER" then
+    raw = table_after("[Aa][Ll][Tt][Ee][Rr]%s+[Tt][Aa][Bb][Ll][Ee]")
+  end
+  return raw and sql.unquote_ident(raw) or nil
+end
+
+local function after_ddl_execute(stmt_type, sql_str, url)
+  local table_name = parse_ddl_table(stmt_type, sql_str)
+  if stmt_type == "DROP" and table_name then
+    view.close_table_sessions(table_name, url)
+  elseif stmt_type == "ALTER" and table_name then
+    view.refresh_table_sessions(table_name, url)
+  end
+
+  local completion = require("dadbod-grip.completion")
+  completion.invalidate(url)
+  vim.schedule(function()
+    pcall(function() completion.warm_schema(url) end)
+  end)
+
+  local schema_mod = require("dadbod-grip.schema")
+  if schema_mod.is_open() then
+    schema_mod.refresh(url)
+  end
+end
+
 -- File extensions DuckDB can query directly (file-as-table).
 local DUCKDB_EXTENSIONS = {
   ".parquet", ".csv", ".tsv", ".json", ".ndjson", ".jsonl", ".xlsx",
@@ -879,9 +921,7 @@ function M.open(arg, url, opts)
       vim.notify(string.format("%s executed (%dms)", stmt_type, ms), vim.log.levels.INFO)
       local history = require("dadbod-grip.history")
       history.record({ sql = mutation_sql, url = exec_conn, type = stmt_type:lower(), elapsed_ms = ms })
-      for bufnr_r, session_r in pairs(view._sessions) do
-        if session_r.on_refresh then session_r.on_refresh(bufnr_r); break end
-      end
+      after_ddl_execute(stmt_type, mutation_sql, exec_conn)
     end
     return
   end
@@ -2077,6 +2117,10 @@ function M.setup(opts)
     end
     local ddl_mod = require("dadbod-grip.ddl")
     ddl_mod.create_table(url, function()
+      require("dadbod-grip.completion").invalidate(url)
+      vim.schedule(function()
+        pcall(function() require("dadbod-grip.completion").warm_schema(url) end)
+      end)
       -- Refresh schema browser if open
       local schema_mod = require("dadbod-grip.schema")
       if schema_mod.is_open() then
@@ -2109,6 +2153,11 @@ function M.setup(opts)
     end
     local ddl_mod = require("dadbod-grip.ddl")
     ddl_mod.drop_table(table_name, url, function()
+      view.close_table_sessions(table_name, url)
+      require("dadbod-grip.completion").invalidate(url)
+      vim.schedule(function()
+        pcall(function() require("dadbod-grip.completion").warm_schema(url) end)
+      end)
       local schema_mod = require("dadbod-grip.schema")
       if schema_mod.is_open() then
         schema_mod.refresh(url)

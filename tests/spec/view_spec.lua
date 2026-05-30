@@ -174,6 +174,51 @@ test("classify_cell: '1' without type returns nil (not bool)", function()
   eq(classify("1", nil), nil)
 end)
 
+-- ── session helpers ─────────────────────────────────────────────────────────
+
+test("close_table_sessions removes only matching table and url", function()
+  cleanup()
+  local b1 = vim.api.nvim_create_buf(false, true)
+  local b2 = vim.api.nvim_create_buf(false, true)
+  local b3 = vim.api.nvim_create_buf(false, true)
+  view._sessions[b1] = { state = { table_name = "emp4" }, url = "sqlite:a.db" }
+  view._sessions[b2] = { state = { table_name = "emp4" }, url = "sqlite:b.db" }
+  view._sessions[b3] = { state = { table_name = "users" }, url = "sqlite:a.db" }
+
+  view.close_table_sessions("emp4", "sqlite:a.db")
+
+  eq(view._sessions[b1], nil, "matching session removed")
+  assert(view._sessions[b2] ~= nil, "same table on another url kept")
+  assert(view._sessions[b3] ~= nil, "different table kept")
+  cleanup()
+end)
+
+test("refresh_table_sessions refreshes only matching table and url", function()
+  cleanup()
+  local b1 = vim.api.nvim_create_buf(false, true)
+  local b2 = vim.api.nvim_create_buf(false, true)
+  local calls = 0
+  view._sessions[b1] = {
+    state = { table_name = "emp4" },
+    url = "sqlite:a.db",
+    on_refresh = function()
+      calls = calls + 1
+    end,
+  }
+  view._sessions[b2] = {
+    state = { table_name = "emp4" },
+    url = "sqlite:b.db",
+    on_refresh = function()
+      calls = calls + 10
+    end,
+  }
+
+  view.refresh_table_sessions("emp4", "sqlite:a.db")
+
+  eq(calls, 1, "only matching session refreshed")
+  cleanup()
+end)
+
 -- ── summary ──────────────────────────────────────────────────────────────────
 
 print(string.format("\nview_spec: %d passed, %d failed", pass, fail))

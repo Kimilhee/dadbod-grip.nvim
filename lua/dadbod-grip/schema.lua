@@ -688,6 +688,7 @@ local function setup_keymaps(url)
       state.pk_cache = {}
       state.fk_cache = {}
       state.row_count_cache = {}
+      pcall(function() require("dadbod-grip.completion").invalidate(url) end)
       fetch_tables(state)
       render(state)
     end)
@@ -827,6 +828,8 @@ local function setup_keymaps(url)
     end
     local ddl = require("dadbod-grip.ddl")
     ddl.drop_table(node.name, url, function()
+      pcall(function() require("dadbod-grip.view").close_table_sessions(node.name, url) end)
+      pcall(function() require("dadbod-grip.completion").invalidate(url) end)
       state.items = nil
       state.col_cache = {}
       state.row_count_cache = {}
@@ -839,6 +842,7 @@ local function setup_keymaps(url)
   kmap("sidebar_create", function()
     local ddl = require("dadbod-grip.ddl")
     ddl.create_table(url, function()
+      pcall(function() require("dadbod-grip.completion").invalidate(url) end)
       state.items = nil
       state.col_cache = {}
       state.row_count_cache = {}
@@ -1160,6 +1164,7 @@ function M.refresh(url)
   state.pk_cache = {}
   state.fk_cache = {}
   state.row_count_cache = {}
+  pcall(function() require("dadbod-grip.completion").invalidate(url) end)
   -- Only re-render if sidebar is currently visible
   if not _sidebar_winid or not vim.api.nvim_win_is_valid(_sidebar_winid) then return end
   if is_file_url(url) then
