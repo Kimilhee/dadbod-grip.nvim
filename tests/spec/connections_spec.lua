@@ -2,6 +2,7 @@
 
 local connections = require("dadbod-grip.connections")
 local grip_picker = require("dadbod-grip.grip_picker")
+local grip = require("dadbod-grip")
 
 local pass = 0
 local fail = 0
@@ -26,6 +27,14 @@ local function with_cwd(dir, fn)
   vim.cmd("cd " .. vim.fn.fnameescape(dir))
   local ok, err = pcall(fn)
   vim.cmd("cd " .. vim.fn.fnameescape(prev))
+  if not ok then error(err) end
+end
+
+local function with_home(dir, fn)
+  local prev = vim.env.HOME
+  vim.env.HOME = dir
+  local ok, err = pcall(fn)
+  vim.env.HOME = prev
   if not ok then error(err) end
 end
 
@@ -222,6 +231,68 @@ test("pick full display shows duckdb path from the left", function()
   grip_picker.open = orig_open
   connections.list = orig_list
   if not ok then error(err) end
+end)
+
+test("remove deletes global connections from global file", function()
+  local home = vim.fn.tempname()
+  with_home(home, function()
+    grip.setup({})
+    local path = home .. "/.grip/connections.json"
+    vim.fn.mkdir(home .. "/.grip", "p")
+    vim.fn.writefile({ vim.fn.json_encode({
+      { name = "temp1", url = "sqlite:temp1.db" },
+      { name = "keep", url = "sqlite:keep.db" },
+    }) }, path)
+
+    connections.remove("temp1", "global", "sqlite:temp1.db")
+
+    local data = vim.fn.json_decode(table.concat(vim.fn.readfile(path), "\n"))
+    eq(#data, 1, "global connection count")
+    eq(data[1].name, "keep", "remaining global connection")
+  end)
+end)
+
+test("pick D removes global connection from global file", function()
+  local home = vim.fn.tempname()
+  with_home(home, function()
+    grip.setup({})
+    local path = home .. "/.grip/connections.json"
+    vim.fn.mkdir(home .. "/.grip", "p")
+    vim.fn.writefile({ vim.fn.json_encode({
+      { name = "global_only", url = "sqlite:global-only.db" },
+    }) }, path)
+
+    local orig_open = grip_picker.open
+    local orig_input = vim.fn.input
+    local captured_opts
+    grip_picker.open = function(opts)
+      captured_opts = opts
+    end
+    vim.fn.input = function()
+      return "y"
+    end
+
+    local ok, err = pcall(function()
+      connections.pick({ on_cancel = function() end })
+      assert(captured_opts, "picker should open")
+      local item
+      for _, c in ipairs(captured_opts.items) do
+        if c.url == "sqlite:global-only.db" then
+          item = c
+          break
+        end
+      end
+      assert(item and item.source == "global", "global item should be present")
+      captured_opts.on_delete(item, function() end)
+    end)
+
+    grip_picker.open = orig_open
+    vim.fn.input = orig_input
+    if not ok then error(err) end
+
+    local data = vim.fn.json_decode(table.concat(vim.fn.readfile(path), "\n"))
+    eq(#data, 0, "global file should be empty")
+  end)
 end)
 
 test("short_url keeps database schemes visible", function()

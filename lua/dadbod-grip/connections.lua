@@ -598,16 +598,41 @@ function M.touch(url)
   if changed then write_file_connections(conns) end
 end
 
---- Remove a connection from .grip/connections.json by name.
-function M.remove(name)
-  local conns = read_local_connections()
+local function write_connections_to_path(path, conns, ensure_dir_fn)
+  ensure_dir_fn()
   local filtered = {}
   for _, c in ipairs(conns) do
-    if c.name ~= name then
+    local entry = { name = c.name, url = c.url }
+    if c.type then entry.type = c.type end
+    if c.attachments and #c.attachments > 0 then entry.attachments = c.attachments end
+    if c.last_used then entry.last_used = c.last_used end
+    table.insert(filtered, entry)
+  end
+  vim.fn.writefile({ vim.fn.json_encode(filtered) }, path)
+end
+
+--- Remove a connection from its saved file by name.
+function M.remove(name, source, url)
+  local path = connections_path()
+  local ensure_dir = ensure_grip_dir
+  local conns = read_local_connections()
+  if source == "global" and not configured_connections_path() then
+    path = global_connections_path()
+    ensure_dir = ensure_global_grip_dir
+    conns = read_json_connections(path, "global")
+  end
+
+  local filtered = {}
+  for _, c in ipairs(conns) do
+    if c.name ~= name or (url and c.url ~= url) then
       table.insert(filtered, c)
     end
   end
-  write_file_connections(filtered)
+  if path == connections_path() then
+    write_file_connections(filtered)
+  else
+    write_connections_to_path(path, filtered, ensure_dir)
+  end
 end
 
 --- Switch active connection. Routes file connections through grip.open(),
@@ -1015,7 +1040,7 @@ function M.pick(opts)
       end
       local ok, ans = pcall(vim.fn.input, { prompt = "Remove '" .. c.name .. "'? (y/N): ", cancelreturn = CANCEL })
       if ok and (ans == "y" or ans == "yes") then
-        M.remove(c.name)
+        M.remove(c.name, c.source, c.url)
         refresh_fn(build_picker_items())
       end
     end,
