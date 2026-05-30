@@ -116,6 +116,9 @@ local LOCAL_FILE_EXTS = {
   ".xlsx", ".orc", ".arrow", ".ipc",
 }
 
+local SQLITE_FILE_EXTS = { ".db", ".sqlite", ".sqlite3" }
+local DUCKDB_FILE_EXTS = { ".duckdb" }
+
 --- Scan cwd for supported data files and return them as picker-ready items.
 --- Scans root of cwd and one level of subdirectories (data/, demo/, etc.).
 --- Files are sorted alphabetically by display name.
@@ -159,6 +162,84 @@ local function scan_local_files()
   return result
 end
 
+--- Scan cwd for SQLite database files and return picker-ready connection items.
+local function scan_local_sqlite_files()
+  local cwd = vim.fn.getcwd()
+  local result = {}
+  local seen = {}
+  for _, ext in ipairs(SQLITE_FILE_EXTS) do
+    local root_files = vim.fn.glob(cwd .. "/*" .. ext, false, true)
+    for _, path in ipairs(root_files) do
+      if not seen[path] then
+        seen[path] = true
+        table.insert(result, {
+          name            = vim.fn.fnamemodify(path, ":t"),
+          connection_name = vim.fn.fnamemodify(path, ":t:r"),
+          url             = "sqlite:" .. path,
+          _local_sqlite   = true,
+          size_bytes      = vim.fn.getfsize(path),
+        })
+      end
+    end
+    local sub_files = vim.fn.glob(cwd .. "/*/*" .. ext, false, true)
+    for _, path in ipairs(sub_files) do
+      if not seen[path] then
+        seen[path] = true
+        local subdir = vim.fn.fnamemodify(path, ":h:t")
+        local fname  = vim.fn.fnamemodify(path, ":t")
+        table.insert(result, {
+          name            = subdir .. "/" .. fname,
+          connection_name = vim.fn.fnamemodify(path, ":t:r"),
+          url             = "sqlite:" .. path,
+          _local_sqlite   = true,
+          size_bytes      = vim.fn.getfsize(path),
+        })
+      end
+    end
+  end
+  table.sort(result, function(a, b) return a.name < b.name end)
+  return result
+end
+
+--- Scan cwd for DuckDB database files and return picker-ready connection items.
+local function scan_local_duckdb_files()
+  local cwd = vim.fn.getcwd()
+  local result = {}
+  local seen = {}
+  for _, ext in ipairs(DUCKDB_FILE_EXTS) do
+    local root_files = vim.fn.glob(cwd .. "/*" .. ext, false, true)
+    for _, path in ipairs(root_files) do
+      if not seen[path] then
+        seen[path] = true
+        table.insert(result, {
+          name            = vim.fn.fnamemodify(path, ":t"),
+          connection_name = vim.fn.fnamemodify(path, ":t:r"),
+          url             = "duckdb:" .. path,
+          _local_duckdb   = true,
+          size_bytes      = vim.fn.getfsize(path),
+        })
+      end
+    end
+    local sub_files = vim.fn.glob(cwd .. "/*/*" .. ext, false, true)
+    for _, path in ipairs(sub_files) do
+      if not seen[path] then
+        seen[path] = true
+        local subdir = vim.fn.fnamemodify(path, ":h:t")
+        local fname  = vim.fn.fnamemodify(path, ":t")
+        table.insert(result, {
+          name            = subdir .. "/" .. fname,
+          connection_name = vim.fn.fnamemodify(path, ":t:r"),
+          url             = "duckdb:" .. path,
+          _local_duckdb   = true,
+          size_bytes      = vim.fn.getfsize(path),
+        })
+      end
+    end
+  end
+  table.sort(result, function(a, b) return a.name < b.name end)
+  return result
+end
+
 --- Mask the password in a DB URL for display. Returns URL unchanged if no password found.
 local function mask_url(url)
   if not url or url == "" then return url end
@@ -184,7 +265,23 @@ local function short_url(url)
     if #out > 40 then out = out:sub(1, 39) .. "…" end
     return out
   end
-  -- For sqlite/duckdb file paths: keep filename only
+  -- For SQLite/DuckDB database files: keep the scheme visible.
+  local db_scheme, db_path = stripped:match("^(sqlite:)(.*)$")
+  if not db_scheme then
+    db_scheme, db_path = stripped:match("^(duckdb:)([^:].*)$")
+  end
+  if db_scheme then
+    if db_path:match("^/") then
+      db_path = vim.fn.fnamemodify(db_path, ":.")
+    end
+    local out = db_scheme .. db_path
+    if #out > 40 then
+      local keep = 39 - #db_scheme
+      out = db_scheme .. "…" .. db_path:sub(math.max(1, #db_path - keep + 1))
+    end
+    return out
+  end
+  -- For plain data file paths: keep filename only
   local fname = stripped:match("([^/\\]+%.%a+)$")
   if fname then
     if #fname > 40 then fname = fname:sub(1, 39) .. "…" end
@@ -719,6 +816,8 @@ function M.pick(opts)
 
   -- Scan cwd for local data files (CSV, Parquet, JSON, etc.)
   local local_files = scan_local_files()
+  local local_sqlite_files = scan_local_sqlite_files()
+  local local_duckdb_files = scan_local_duckdb_files()
 
   local max_name = 0
   for _, c in ipairs(conns) do
@@ -726,6 +825,28 @@ function M.pick(opts)
   end
   for _, f in ipairs(local_files) do
     max_name = math.max(max_name, vim.fn.strdisplaywidth(f.name))
+  end
+  for _, f in ipairs(local_sqlite_files) do
+    max_name = math.max(max_name, vim.fn.strdisplaywidth(f.name))
+  end
+  for _, f in ipairs(local_duckdb_files) do
+    max_name = math.max(max_name, vim.fn.strdisplaywidth(f.name))
+  end
+  max_name = math.min(max_name, 24)
+
+  local function fit_name(name)
+    if vim.fn.strdisplaywidth(name) <= max_name then return name end
+    local chars = vim.fn.strchars(name)
+    while chars > 0 do
+      local candidate = vim.fn.strcharpart(name, 0, chars) .. "…"
+      if vim.fn.strdisplaywidth(candidate) <= max_name then return candidate end
+      chars = chars - 1
+    end
+    return "…"
+  end
+
+  local function name_pad(name)
+    return string.rep(" ", math.max(0, max_name - vim.fn.strdisplaywidth(name)))
   end
 
   -- Sentinel items at bottom of list
@@ -780,6 +901,16 @@ function M.pick(opts)
     for _, c in ipairs(other_conns) do table.insert(out, c) end
 
     local fresh_files = scan_local_files()
+    local fresh_sqlite_files = scan_local_sqlite_files()
+    local fresh_duckdb_files = scan_local_duckdb_files()
+    if #fresh_duckdb_files > 0 then
+      table.insert(out, { name = "Local DuckDB (cwd)", url = "", _section_header = true })
+      for _, f in ipairs(fresh_duckdb_files) do table.insert(out, f) end
+    end
+    if #fresh_sqlite_files > 0 then
+      table.insert(out, { name = "Local SQLite (cwd)", url = "", _section_header = true })
+      for _, f in ipairs(fresh_sqlite_files) do table.insert(out, f) end
+    end
     if #fresh_files > 0 then
       table.insert(out, { name = "Local Files (cwd)", url = "", _section_header = true })
       for _, f in ipairs(fresh_files) do table.insert(out, f) end
@@ -796,6 +927,7 @@ function M.pick(opts)
 
   require("dadbod-grip.grip_picker").open({
     title = "Connections",
+    min_width = 70,
     items = picker_items,
     on_cancel = on_cancel,
     selectable = function(c)
@@ -809,13 +941,21 @@ function M.pick(opts)
         return "  " .. c.name
       end
       if c._local_file then
-        local pad = string.rep(" ", max_name - vim.fn.strdisplaywidth(c.name))
-        return "  " .. c.name .. pad .. "  " .. fmt_size(c.size_bytes)
+        local name = fit_name(c.name)
+        return "  " .. name .. name_pad(name) .. "  " .. fmt_size(c.size_bytes)
+      end
+      if c._local_sqlite then
+        local name = fit_name(c.name)
+        return "  " .. name .. name_pad(name) .. "  " .. fmt_size(c.size_bytes)
+      end
+      if c._local_duckdb then
+        local name = fit_name(c.name)
+        return "  " .. name .. name_pad(name) .. "  " .. fmt_size(c.size_bytes)
       end
       local dot = health_char(c.url)
-      local pad = string.rep(" ", max_name - vim.fn.strdisplaywidth(c.name))
+      local name = fit_name(c.name)
       local url_display = show_pass[c.url] and c.url or short_url(c.url)
-      return dot .. " " .. c.name .. pad .. "  " .. url_display
+      return dot .. " " .. name .. name_pad(name) .. "  " .. url_display
     end,
     on_select = function(c)
       if c._section_header then return end
@@ -825,6 +965,10 @@ function M.pick(opts)
         prompt_temp_connection()
       elseif c._local_file then
         M.switch(c.url, nil, "file", { write = true })
+      elseif c._local_sqlite then
+        M.switch(c.url, c.connection_name or vim.fn.fnamemodify(c.url, ":t:r"))
+      elseif c._local_duckdb then
+        M.switch(c.url, c.connection_name or vim.fn.fnamemodify(c.url, ":t:r"))
       else
         -- Lazy-seed the portal DB on first selection
         if c._is_demo and c._demo_sql and c._demo_sql ~= "" then
@@ -843,7 +987,8 @@ function M.pick(opts)
       end
     end,
     on_delete = function(c, refresh_fn)
-      if c._new or c._temp or c._section_header or c._local_file then return end
+      if c._new or c._temp or c._section_header or c._local_file
+          or c._local_sqlite or c._local_duckdb then return end
       local CANCEL = "\0"
       -- Starter built-in: write a hidden flag so it never appears again
       if c._builtin_id then
@@ -1030,5 +1175,9 @@ end
 function M.grip_dir_path()
   return grip_dir()
 end
+
+M._scan_local_sqlite_files = scan_local_sqlite_files
+M._scan_local_duckdb_files = scan_local_duckdb_files
+M._short_url = short_url
 
 return M

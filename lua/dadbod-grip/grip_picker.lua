@@ -137,8 +137,8 @@ function M.open(opts)
   local PREVIEW_GAP = 2    -- columns between picker and preview
 
   local function calc_width(flist)
-    local min_w = math.max(#title + 6, 30)
     local max_w = math.min(vim.o.columns - 6, 70)
+    local min_w = math.min(max_w, math.max(#title + 6, opts.min_width or 30))
     local content_w = min_w
     for _, item in ipairs(flist) do
       content_w = math.max(content_w, vim.fn.strdisplaywidth(tostring(display(item))) + 6)

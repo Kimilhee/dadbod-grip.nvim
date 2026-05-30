@@ -813,7 +813,19 @@ system, set `connections_path` in your setup() call. See |grip-config|.
 Local file discovery ~
 
 When the connection picker opens it scans the current working directory for
-supported data files and shows them in a "Local Files (cwd)" section:
+SQLite databases, DuckDB databases, and supported data files:
+
+  .db  .sqlite  .sqlite3
+
+SQLite files appear in "Local SQLite (cwd)". Selecting one adds it as a
+`sqlite:` connection and opens the workspace.
+
+  .duckdb
+
+DuckDB files appear in "Local DuckDB (cwd)". Selecting one adds it as a
+`duckdb:` connection and opens the workspace.
+
+Data files appear in "Local Files (cwd)":
 
   .csv  .tsv  .json  .ndjson  .jsonl  .parquet  .xlsx  .orc  .arrow  .ipc
 
