@@ -128,6 +128,14 @@ test("resolve_query: lowercase 'select' returns raw spec", function()
   assert(spec, "spec should not be nil")
 end)
 
+test("resolve_query: VACUUM is routed as executable SQL", function()
+  local spec, tbl, file_path, mutation_sql = grip._resolve_query("VACUUM;", 50)
+  eq(spec, nil, "spec should be nil")
+  eq(tbl, nil, "table should be nil")
+  eq(file_path, nil, "file path should be nil")
+  eq(mutation_sql, "VACUUM;", "mutation sql")
+end)
+
 -- ── resolve_query: table extraction from SELECT/TABLE ────────────────────────
 
 test("resolve_query: SELECT with double-quoted PascalCase table", function()

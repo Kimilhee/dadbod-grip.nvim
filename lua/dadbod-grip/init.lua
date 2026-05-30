@@ -207,6 +207,7 @@ local function resolve_query(arg, page_size)
   -- Destructive statements: execute directly, don't wrap in SELECT
   if upper == "UPDATE" or upper == "DELETE" or upper == "INSERT"
     or upper == "ALTER" or upper == "DROP" or upper == "CREATE"
+    or upper == "VACUUM"
     or upper == "BEGIN" or upper == "COMMIT" or upper == "ROLLBACK" then
     return nil, nil, nil, arg  -- 4th return = mutation SQL
   end
