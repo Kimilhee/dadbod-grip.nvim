@@ -156,11 +156,12 @@ function M.parse_context(before)
     return "dotted"
   end
 
-  -- Table context: after FROM / JOIN / UPDATE / INSERT INTO
+  -- Table context: after FROM / JOIN / UPDATE / INSERT INTO / DDL TABLE
   if up:match("FROM%s+[%w_]*$")
     or up:match("JOIN%s+[%w_]*$")
     or up:match("UPDATE%s+[%w_]*$")
-    or up:match("INTO%s+[%w_]*$") then
+    or up:match("INTO%s+[%w_]*$")
+    or up:match("TABLE%s+[%w_]*$") then
     return "table"
   end
 
@@ -200,7 +201,8 @@ function M.parse_context_full(before)
   if up:match("FROM%s+[%w_]*$")
     or up:match("JOIN%s+[%w_]*$")
     or up:match("UPDATE%s+[%w_]*$")
-    or up:match("INTO%s+[%w_]*$") then
+    or up:match("INTO%s+[%w_]*$")
+    or up:match("TABLE%s+[%w_]*$") then
     local word2 = before:match("([%w_]*)$") or ""
     return { type = "table", word = word2 }
   end

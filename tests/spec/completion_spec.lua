@@ -40,7 +40,7 @@ end
 -- Returns { type, word, qualifier?, alias?, table? } or nil.
 local pc = completion.parse_context
 
--- Table context: after FROM / JOIN / UPDATE / INSERT INTO
+-- Table context: after FROM / JOIN / UPDATE / INSERT INTO / DDL TABLE
 eq(pc("SELECT * FROM "), "table",  "FROM: table context type")
 eq(pc("SELECT * FROM use"), "table", "FROM partial word: table context")
 eq(pc("select * from "), "table",  "FROM lowercase: table context")
@@ -49,6 +49,9 @@ eq(pc("LEFT JOIN "), "table",      "LEFT JOIN: table context")
 eq(pc("INNER JOIN "), "table",     "INNER JOIN: table context")
 eq(pc("UPDATE "), "table",         "UPDATE: table context")
 eq(pc("INSERT INTO "), "table",    "INSERT INTO: table context")
+eq(pc("DROP TABLE "), "table",     "DROP TABLE: table context")
+eq(pc("ALTER TABLE emp"), "table",  "ALTER TABLE partial word: table context")
+eq(pc("TRUNCATE TABLE "), "table",  "TRUNCATE TABLE: table context")
 
 -- Column context: after SELECT / WHERE / ORDER BY / GROUP BY / HAVING
 eq(pc("SELECT "), "column",        "SELECT: column context")
