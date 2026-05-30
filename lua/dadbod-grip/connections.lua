@@ -274,9 +274,12 @@ local function short_url(url)
     if db_path:match("^/") then
       db_path = vim.fn.fnamemodify(db_path, ":.")
     end
+    -- Width budget: connections picker is 70 wide; label area = 64;
+    -- prefix (dot+space+name(24)+2 spaces) = 28; so URL must fit in 36.
+    local max = 36
     local out = db_scheme .. db_path
-    if #out > 40 then
-      local keep = 39 - #db_scheme
+    if #out > max then
+      local keep = max - 1 - #db_scheme
       out = db_scheme .. "…" .. db_path:sub(math.max(1, #db_path - keep + 1))
     end
     return out

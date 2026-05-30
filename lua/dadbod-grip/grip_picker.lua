@@ -248,8 +248,16 @@ function M.open(opts)
       local max_name = w - 6
       for i, item in ipairs(flist) do
         local label = tostring(display(item))
-        if #label > max_name then
-          label = label:sub(1, max_name - 1) .. "…"
+        if vim.fn.strdisplaywidth(label) > max_name then
+          local chars = vim.fn.strchars(label)
+          while chars > 0 do
+            local candidate = vim.fn.strcharpart(label, 0, chars) .. "…"
+            if vim.fn.strdisplaywidth(candidate) <= max_name then
+              label = candidate
+              break
+            end
+            chars = chars - 1
+          end
         end
         local prefix = (i == cursor) and "  ▶ " or "    "
         table.insert(lines, prefix .. label)
