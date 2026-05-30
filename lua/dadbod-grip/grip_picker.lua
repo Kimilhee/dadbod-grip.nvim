@@ -10,6 +10,7 @@
 --                                           refresh_fn(new_items) to re-render.
 --   preview  : fn(item) -> string[]         optional; enables side preview pane.
 --                                           return lines to show in the pane.
+--   selectable: fn(item) -> bool            optional; false items are skipped by cursor.
 --
 -- Keymaps (buffer-local, normal mode):
 --   j / <Down>   Move down (wraps)
@@ -53,6 +54,7 @@ function M.open(opts)
   local on_delete = opts.on_delete
   local preview_fn = opts.preview   -- fn(item) -> string[] | nil
   local actions   = opts.actions or {}  -- list of {key, label, fn(item)}
+  local selectable = opts.selectable or function(_) return true end
   local title     = opts.title or "Grip Picker"
 
   -- Mutable state
@@ -72,6 +74,47 @@ function M.open(opts)
       end
     end
     return out
+  end
+
+  local function first_selectable(flist)
+    for i, item in ipairs(flist) do
+      if selectable(item) then return i end
+    end
+    return nil
+  end
+
+  local function normalize_cursor(flist, preferred)
+    if #flist == 0 then return 1 end
+    preferred = clamp(preferred or cursor, 1, #flist)
+    if selectable(flist[preferred]) then return preferred end
+    for i = preferred + 1, #flist do
+      if selectable(flist[i]) then return i end
+    end
+    for i = preferred - 1, 1, -1 do
+      if selectable(flist[i]) then return i end
+    end
+    return preferred
+  end
+
+  local render
+
+  local function move_cursor(delta)
+    local flist = filtered_items()
+    if #flist == 0 then return end
+    local start = normalize_cursor(flist, cursor)
+    if not first_selectable(flist) then
+      cursor = start
+      render()
+      return
+    end
+    local next_i = start
+    repeat
+      next_i = next_i + delta
+      if next_i > #flist then next_i = 1 end
+      if next_i < 1 then next_i = #flist end
+    until selectable(flist[next_i])
+    cursor = next_i
+    render()
   end
 
   -- ── buffers ──
@@ -182,11 +225,11 @@ function M.open(opts)
 
   -- ── render ──
 
-  local function render()
+  render = function()
     if not vim.api.nvim_buf_is_valid(popup_buf) then return end
 
     local flist = filtered_items()
-    cursor = clamp(cursor, 1, math.max(1, #flist))
+    cursor = normalize_cursor(flist, cursor)
 
     local lines = {}
 
@@ -322,17 +365,11 @@ function M.open(opts)
 
   -- Navigation
   map({ "j", "<Down>" }, function()
-    local flist = filtered_items()
-    if #flist == 0 then return end
-    cursor = cursor >= #flist and 1 or cursor + 1
-    render()
+    move_cursor(1)
   end)
 
   map({ "k", "<Up>" }, function()
-    local flist = filtered_items()
-    if #flist == 0 then return end
-    cursor = cursor <= 1 and #flist or cursor - 1
-    render()
+    move_cursor(-1)
   end)
 
   -- Select
@@ -340,7 +377,7 @@ function M.open(opts)
     local flist = filtered_items()
     if #flist == 0 then return end
     local item = flist[cursor]
-    if not item then return end
+    if not item or not selectable(item) then return end
     _selected = true
     close()
     if on_select then
@@ -354,12 +391,12 @@ function M.open(opts)
       local flist = filtered_items()
       if #flist == 0 then return end
       local item = flist[cursor]
-      if not item then return end
+      if not item or not selectable(item) then return end
 
       local function refresh_fn(new_items)
         items = new_items or {}
         local new_flist = filtered_items()
-        cursor = clamp(cursor, 1, math.max(1, #new_flist))
+        cursor = normalize_cursor(new_flist, cursor)
         if vim.api.nvim_win_is_valid(win) then
           render()
         end
@@ -377,7 +414,7 @@ function M.open(opts)
       local flist = filtered_items()
       if #flist == 0 then return end
       local item = flist[cursor]
-      if not item then return end
+      if not item or not selectable(item) then return end
       if action.close_on_select then
         _selected = true
         close()
@@ -397,7 +434,7 @@ function M.open(opts)
     local ok, input = pcall(vim.fn.input, { prompt = prompt, default = filter, cancelreturn = CANCEL })
     if not ok or input == CANCEL then return end  -- Ctrl-C or Esc = no change
     filter = input
-    cursor = 1
+    cursor = normalize_cursor(filtered_items(), 1)
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_set_current_win(win)
       render()
@@ -407,7 +444,7 @@ function M.open(opts)
   -- F: clear current filter
   map("F", function()
     filter = ""
-    cursor = 1
+    cursor = normalize_cursor(filtered_items(), 1)
     render()
   end)
 
@@ -415,17 +452,11 @@ function M.open(opts)
 
   -- n/N: cycle through filtered results (next/prev)
   map("n", function()
-    local flist = filtered_items()
-    if #flist == 0 then return end
-    cursor = cursor >= #flist and 1 or cursor + 1
-    render()
+    move_cursor(1)
   end)
 
   map("N", function()
-    local flist = filtered_items()
-    if #flist == 0 then return end
-    cursor = cursor <= 1 and #flist or cursor - 1
-    render()
+    move_cursor(-1)
   end)
 
   -- ── initial render ──

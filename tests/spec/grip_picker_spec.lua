@@ -273,6 +273,38 @@ test("k wraps from first item to last", function()
   close_all_floats()
 end)
 
+test("navigation skips unselectable items", function()
+  local buf = open_picker_capture_buf({
+    title = "Skip",
+    items = {
+      { label = "section", header = true },
+      { label = "first" },
+      { label = "second" },
+    },
+    display = function(item) return item.label end,
+    selectable = function(item) return not item.header end,
+  })
+  assert(buf, "buf should exist")
+
+  local lines_before = buf_lines(buf)
+  local cursor_item = nil
+  for _, l in ipairs(lines_before) do
+    if l:find("▶", 1, true) then cursor_item = l end
+  end
+  assert(cursor_item and cursor_item:find("first", 1, true),
+    "cursor should start on first selectable item, got: " .. tostring(cursor_item))
+
+  press(buf, "k")
+  local lines_after = buf_lines(buf)
+  cursor_item = nil
+  for _, l in ipairs(lines_after) do
+    if l:find("▶", 1, true) then cursor_item = l end
+  end
+  assert(cursor_item and cursor_item:find("second", 1, true),
+    "k should wrap to previous selectable item, got: " .. tostring(cursor_item))
+  close_all_floats()
+end)
+
 test("single item: j and k do not crash", function()
   local buf = open_picker_capture_buf({
     title = "Single",

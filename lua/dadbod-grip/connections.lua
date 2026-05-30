@@ -798,9 +798,12 @@ function M.pick(opts)
     title = "Connections",
     items = picker_items,
     on_cancel = on_cancel,
+    selectable = function(c)
+      return not c._section_header
+    end,
     display = function(c)
       if c._section_header then
-        return "  " .. c.name
+        return "[" .. c.name .. "]"
       end
       if c._new or c._temp then
         return "  " .. c.name
